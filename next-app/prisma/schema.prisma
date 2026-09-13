@@ -1,0 +1,281 @@
+// ============================================================
+// schema.prisma — Gestor de Ofertas | Droguería Central
+// Stack: PostgreSQL + Prisma ORM
+//
+// Dominio: OFERTAS COMERCIALES. Las farmacias solicitan ofertas
+// sobre stock propio inmovilizado / con sobrestock / próximo a
+// vencer, y la droguería (compradores) las aprueba con una
+// condición comercial. El área de Precios cierra el ciclo
+// cargando la condición en el ERP y notificando a la farmacia.
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Prisma 7: las URLs van en prisma.config.ts (migraciones) y el cliente
+  // runtime usa un driver adapter (ver lib/prisma.ts).
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  FARMACIA
+  COMPRADOR
+  PRECIOS
+}
+
+/// Estado agregado de la solicitud (cabecera).
+enum EstadoSolicitud {
+  PENDIENTE // Enviada por la farmacia, ningún ítem revisado
+  EN_PROCESO // Al menos un ítem revisado, pero el ciclo no cerró
+  FINALIZADA // Todos los ítems resueltos y notificados a la farmacia
+}
+
+/// Decisión del comprador sobre un ítem individual.
+enum EstadoDecision {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+/// Motivo comercial real del negocio de ofertas.
+enum MotivoSolicitud {
+  VENCIMIENTO_PROXIMO
+  STOCK_INMOVILIZADO
+  SOBRESTOCK
+}
+
+/// Tipos de correo que pasan por el outbox.
+enum EmailTipo {
+  NOTIF_COMPRADOR // "Tenés X ítems nuevos pendientes"
+  CONSOLIDADO_FARMACIA // Cierre de ciclo con detalle final
+  RECHAZO_TOTAL_FARMACIA // Solicitud 100% rechazada
+}
+
+/// Estado de un correo en el outbox (cola con dead-letter).
+enum EmailEstado {
+  PENDIENTE
+  ENVIADO
+  FALLIDO // Falló pero se reintentará
+  DEAD // Agotó reintentos / sin destinatario válido → revisión manual
+  CANCELADO
+}
+
+// ─────────────────────────────────────────────
+// FARMACIA
+// ─────────────────────────────────────────────
+
+model Farmacia {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique
+  email     String? // Puede no tener mail → null = SIN_MAIL
+  activa    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuarios    User[]
+  solicitudes Solicitud[]
+
+  @@index([activa])
+  @@map("farmacias")
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  nombre    String
+  role      Role
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Vínculo usuario↔farmacia (operador asignado a una farmacia).
+  farmaciaId Int?
+  farmacia   Farmacia? @relation(fields: [farmaciaId], references: [id])
+
+  // Un comprador maneja N laboratorios (muchos-a-muchos vía tabla puente).
+  laboratorios LaboratorioComprador[]
+
+  itemsAsignados     ItemSolicitud[] @relation("compradorItems")
+  itemsAprobados     ItemSolicitud[] @relation("aprobadorItems")
+  solicitudesCreadas Solicitud[]     @relation("creadorSolicitudes")
+
+  @@index([role])
+  @@index([farmaciaId])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// LABORATORIO → COMPRADOR (un comprador maneja N labs)
+// ─────────────────────────────────────────────
+
+model LaboratorioComprador {
+  id          Int    @id @default(autoincrement())
+  laboratorio String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, laboratorio])
+  @@index([laboratorio]) // Resolver comprador por laboratorio en el lookup
+  @@map("laboratorio_comprador")
+}
+
+// ─────────────────────────────────────────────
+// ARTICULO (maestro pesado, ~155.000 registros)
+// ─────────────────────────────────────────────
+
+model Articulo {
+  codigoBarra     String   @id // EAN normalizado
+  descripcion     String
+  laboratorio     String
+  categoria       String?
+  stockReferencia Int?     @default(0) // Stock central de referencia
+  activo          Boolean  @default(true)
+  updatedAt       DateTime @updatedAt
+
+  items ItemSolicitud[]
+
+  @@index([laboratorio])
+  @@index([descripcion])
+  @@map("articulos")
+}
+
+// ─────────────────────────────────────────────
+// SOLICITUD (cabecera de un lote)
+// ─────────────────────────────────────────────
+
+model Solicitud {
+  id         String          @id @default(cuid())
+  codigo     String          @unique // "SOL-<timestamp>" legible
+  fechaEnvio DateTime        @default(now())
+  estado     EstadoSolicitud @default(PENDIENTE)
+
+  farmaciaId Int
+  farmacia   Farmacia @relation(fields: [farmaciaId], references: [id])
+
+  // Snapshots históricos (trazabilidad si el maestro cambia después).
+  nombreFarmaciaHistorico String
+  emailFarmaciaHistorico  String // "SIN_MAIL" si la farmacia no tenía mail
+
+  // Idempotencia: evita duplicar el lote ante reintentos de red.
+  idempotencyKey String @unique
+
+  // Operador que cargó el lote.
+  creadoPorId String?
+  creadoPor   User?   @relation("creadorSolicitudes", fields: [creadoPorId], references: [id])
+
+  // Notificación final consolidada a la farmacia (anti-duplicado).
+  mailFarmaciaEnviado   Boolean   @default(false)
+  mailFarmaciaEnviadoAt DateTime?
+
+  items ItemSolicitud[]
+
+  @@index([farmaciaId])
+  @@index([estado])
+  @@index([fechaEnvio])
+  @@map("solicitudes")
+}
+
+// ─────────────────────────────────────────────
+// ITEM SOLICITUD
+// ─────────────────────────────────────────────
+
+model ItemSolicitud {
+  id String @id @default(cuid())
+
+  cantidad         Int
+  motivo           MotivoSolicitud
+  fechaVencimiento String? // MM/AA — obligatorio si motivo = VENCIMIENTO_PROXIMO
+  observaciones    String?
+
+  estadoDecision      EstadoDecision @default(PENDIENTE)
+  condicionAutorizada String? // Acción comercial: "50%", "2x1", ...
+  motivoRechazo       String?
+  fechaAprobacion     DateTime?
+
+  // Cierre por el área de Precios.
+  cargadoERP    Boolean   @default(false)
+  fechaCargaERP DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  solicitudId String
+  solicitud   Solicitud @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+
+  codigoBarra String
+  articulo    Articulo @relation(fields: [codigoBarra], references: [codigoBarra])
+
+  // Comprador resuelto dinámicamente por laboratorio al momento del envío.
+  compradorId            String?
+  comprador              User?   @relation("compradorItems", fields: [compradorId], references: [id])
+  compradorMailHistorico String // Snapshot del mail del comprador al enviar
+  laboratorioHistorico   String // Snapshot del laboratorio del artículo al enviar
+
+  // Snapshot del aprobador.
+  aprobadorId   String?
+  aprobador     User?   @relation("aprobadorItems", fields: [aprobadorId], references: [id])
+  aprobadorMail String?
+
+  @@index([estadoDecision])
+  @@index([cargadoERP, estadoDecision])
+  @@index([compradorId, estadoDecision])
+  @@index([solicitudId])
+  @@map("items_solicitud")
+}
+
+// ─────────────────────────────────────────────
+// AUDIT LOG (append-only, trazabilidad total)
+// ─────────────────────────────────────────────
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String // "Solicitud" | "ItemSolicitud" | "User" | ...
+  entityId   String
+  action     String // "CREAR" | "APROBAR" | "RECHAZAR" | "CARGAR_ERP" | ...
+  actorId    String?
+  actorEmail String?
+  diff       Json? // { campo: { antes, despues } }
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+  @@map("audit_log")
+}
+
+// ─────────────────────────────────────────────
+// EMAIL OUTBOX (cola transaccional, reintentos + dead-letter)
+// ─────────────────────────────────────────────
+
+model EmailOutbox {
+  id           String      @id @default(cuid())
+  tipo         EmailTipo
+  destinatario String
+  asunto       String
+  payload      Json // Datos para renderizar la plantilla
+  estado       EmailEstado @default(PENDIENTE)
+  intentos     Int         @default(0)
+  maxIntentos  Int         @default(5)
+  ultimoError  String?
+  dedupKey     String?     @unique // Evita doble notificación del mismo evento
+  scheduledAt  DateTime    @default(now())
+  sentAt       DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([estado, scheduledAt])
+  @@map("email_outbox")
+}

@@ -1,0 +1,29 @@
+# PostgreSQL local para desarrollo/test del Gestor de Ofertas.
+# Uso:
+#   docker compose up -d      → levanta Postgres en localhost:5432
+#   docker compose down       → detiene (los datos persisten en el volumen)
+#   docker compose down -v    → detiene y borra los datos
+#
+# Credenciales y DB coinciden con .env.local (DATABASE_URL / DIRECT_URL).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: gestor_ofertas_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gestor
+      POSTGRES_PASSWORD: gestor_dev
+      POSTGRES_DB: gestor_ofertas
+    ports:
+      - "5432:5432"
+    volumes:
+      - gestor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestor -d gestor_ofertas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gestor_pgdata:

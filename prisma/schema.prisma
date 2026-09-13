@@ -1,0 +1,185 @@
+// ============================================================
+// schema.prisma — Gestor de Ofertas | Droguería Central
+// Stack: PostgreSQL (Supabase) + Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Supabase requiere directURL para migraciones (conexión directa, no pooler)
+  directUrl = env("DIRECT_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  FARMACIA
+  COMPRADOR
+  PRECIOS
+}
+
+enum EstadoSolicitud {
+  PENDIENTE    // Enviada por la farmacia, sin revisar
+  EN_PROCESO   // Al menos un ítem fue procesado
+  FINALIZADA   // Todos los ítems aprobados están en el ERP
+}
+
+enum EstadoDecision {
+  PENDIENTE  // Sin revisión del comprador
+  APROBADO
+  RECHAZADO
+}
+
+// ─────────────────────────────────────────────
+// FARMACIA
+// ─────────────────────────────────────────────
+
+model Farmacia {
+  id         Int      @id @default(autoincrement())
+  nombre     String   @unique
+  email      String   // Destino de notificaciones automáticas
+  activa     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  // Relaciones
+  usuarios   User[]
+  solicitudes Solicitud[]
+
+  @@map("farmacias")
+}
+
+// ─────────────────────────────────────────────
+// USER
+// ─────────────────────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String   // Almacenar con bcrypt (factor 12)
+  nombre      String
+  role        Role
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Opcional: solo para rol FARMACIA
+  farmaciaId  Int?
+  farmacia    Farmacia? @relation(fields: [farmaciaId], references: [id])
+
+  // Relaciones
+  laboratorios      LaboratorioComprador[]  // Solo para rol COMPRADOR
+  itemsRevisados    ItemSolicitud[]         @relation("compradorItems")
+
+  @@index([role])
+  @@index([farmaciaId])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────
+// LABORATORIO → COMPRADOR (mapping)
+// ─────────────────────────────────────────────
+
+model LaboratorioComprador {
+  id          Int    @id @default(autoincrement())
+  laboratorio String // Nombre exacto del laboratorio (debe coincidir con Articulo.laboratorio)
+
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, laboratorio]) // Un comprador no puede tener el mismo lab dos veces
+  @@index([laboratorio])          // Clave para el filtrado en la bandeja del comprador
+  @@map("laboratorio_comprador")
+}
+
+// ─────────────────────────────────────────────
+// ARTICULO (Maestro de productos)
+// ~155.000 registros — optimizado para búsqueda por código de barra
+// ─────────────────────────────────────────────
+
+model Articulo {
+  codigoBarra  String @id                // PK natural (código de barra del producto)
+  descripcion  String
+  laboratorio  String
+  categoria    String?
+  updatedAt    DateTime @updatedAt       // Útil para auditar la última sincronización CSV
+
+  // Relaciones
+  items        ItemSolicitud[]
+
+  @@index([laboratorio])    // Para futuros reportes agrupados por lab
+  @@index([descripcion])    // Para búsquedas por nombre (opcional, si se agrega buscador)
+  @@map("articulos")
+}
+
+// ─────────────────────────────────────────────
+// SOLICITUD
+// ─────────────────────────────────────────────
+
+model Solicitud {
+  id          String          @id @default(cuid())
+  fechaEnvio  DateTime        @default(now())
+  estado      EstadoSolicitud @default(PENDIENTE)
+
+  farmaciaId  Int
+  farmacia    Farmacia        @relation(fields: [farmaciaId], references: [id])
+
+  // Relaciones
+  items       ItemSolicitud[]
+
+  @@index([farmaciaId])
+  @@index([estado])
+  @@index([fechaEnvio])
+  @@map("solicitudes")
+}
+
+// ─────────────────────────────────────────────
+// ITEM SOLICITUD
+// Registro central del flujo: Farmacia → Comprador → Precios
+// ─────────────────────────────────────────────
+
+model ItemSolicitud {
+  id                 String         @id @default(cuid())
+  cantidad           Int
+  motivo             String
+
+  // Estado de decisión del comprador
+  estadoDecision     EstadoDecision @default(PENDIENTE)
+  condicionAutorizada String?       // Texto libre ingresado por el comprador al aprobar
+  fechaAprobacion    DateTime?
+
+  // Estado de carga en ERP (módulo Precios)
+  cargadoERP         Boolean        @default(false)
+  fechaCargaERP      DateTime?
+
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  // FK → Solicitud
+  solicitudId        String
+  solicitud          Solicitud      @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+
+  // FK → Artículo
+  codigoBarra        String
+  articulo           Articulo       @relation(fields: [codigoBarra], references: [codigoBarra])
+
+  // FK → Comprador (se asigna cuando el comprador revisa el ítem)
+  compradorId        String?
+  comprador          User?          @relation("compradorItems", fields: [compradorId], references: [id])
+
+  // ── Índices críticos de rendimiento ──────────
+  // Bandeja del comprador: filtra por estado + laboratorio (join con Articulo)
+  @@index([estadoDecision])
+  // Módulo Precios: todos los aprobados sin cargar
+  @@index([cargadoERP, estadoDecision])
+  // Historial por solicitud
+  @@index([solicitudId])
+
+  @@map("items_solicitud")
+}
