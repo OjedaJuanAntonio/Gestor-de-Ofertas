@@ -1,4 +1,4 @@
-import type { EstadoDecision, EstadoSolicitud } from "@prisma/client";
+import type { EstadoDecision, EstadoSolicitud, MotivoSolicitud } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────
 // Lógica de cierre de ciclo de una solicitud.
@@ -20,7 +20,17 @@ import type { EstadoDecision, EstadoSolicitud } from "@prisma/client";
 export type ItemEstado = {
   estadoDecision: EstadoDecision;
   cargadoERP: boolean;
+  // Opcionales por compatibilidad: si falta `motivo`, se comporta como un
+  // ítem normal (cierra por ERP). Un PROBADOR cierra cuando se envió el tester.
+  motivo?: MotivoSolicitud;
+  testerEnviado?: boolean;
 };
+
+/** Un ítem aprobado está "resuelto" cuando se cumplió su fulfillment:
+ *  tester enviado si es PROBADOR, o cargado en el ERP en cualquier otro caso. */
+function aprobadoResuelto(i: ItemEstado): boolean {
+  return i.motivo === "PROBADOR" ? !!i.testerEnviado : i.cargadoERP;
+}
 
 export function computeEstadoSolicitud(
   items: ItemEstado[],
@@ -31,11 +41,11 @@ export function computeEstadoSolicitud(
   if (!algunoRevisado) return "PENDIENTE";
 
   const todosResueltos = items.every((i) => i.estadoDecision !== "PENDIENTE");
-  const aprobadosCargados = items
+  const aprobadosResueltos = items
     .filter((i) => i.estadoDecision === "APROBADO")
-    .every((i) => i.cargadoERP);
+    .every(aprobadoResuelto);
 
-  if (todosResueltos && aprobadosCargados) return "FINALIZADA";
+  if (todosResueltos && aprobadosResueltos) return "FINALIZADA";
   return "EN_PROCESO";
 }
 

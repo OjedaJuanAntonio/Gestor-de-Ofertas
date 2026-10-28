@@ -206,6 +206,21 @@ describe("computeEstadoSolicitud", () => {
       ]),
     ).toBe("FINALIZADA");
   });
+  it("EN_PROCESO si un probador aprobado aún no se envió como tester", () => {
+    expect(
+      computeEstadoSolicitud([
+        { estadoDecision: "APROBADO", cargadoERP: false, motivo: "PROBADOR", testerEnviado: false },
+      ]),
+    ).toBe("EN_PROCESO");
+  });
+  it("FINALIZADA si el probador aprobado ya se envió (no pasa por ERP)", () => {
+    expect(
+      computeEstadoSolicitud([
+        { estadoDecision: "APROBADO", cargadoERP: false, motivo: "PROBADOR", testerEnviado: true },
+        { estadoDecision: "APROBADO", cargadoERP: true, motivo: "SOBRESTOCK", testerEnviado: false },
+      ]),
+    ).toBe("FINALIZADA");
+  });
 });
 
 describe("evaluarCierre (notificación a la farmacia)", () => {

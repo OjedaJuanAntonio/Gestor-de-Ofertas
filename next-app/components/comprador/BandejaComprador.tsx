@@ -28,6 +28,12 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
   const [resultado, setResultado] = useState<ConfirmarDecisionesResult | null>(null);
   const [intentado, setIntentado] = useState(false);
 
+  // Un probador (tester) no requiere condición comercial al aprobar.
+  const esProb = useMemo(() => {
+    const m = new Map(items.map((it) => [it.id, it.motivo === "PROBADOR"]));
+    return (id: string) => m.get(id) ?? false;
+  }, [items]);
+
   const filtrados = useMemo(() => {
     const q = filtro.trim().toLowerCase();
     if (!q) return items;
@@ -54,7 +60,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
 
   const conDecision = Object.entries(estados).filter(([, s]) => s.decision);
   const aprobadosSinCondicion = conDecision.filter(
-    ([, s]) => s.decision === "APROBADO" && s.condicion.trim() === "",
+    ([id, s]) => s.decision === "APROBADO" && s.condicion.trim() === "" && !esProb(id),
   );
 
   async function confirmar() {
@@ -134,7 +140,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
             {filtrados.map((it) => {
               const st = estados[it.id] ?? { decision: undefined, condicion: "", motivoRechazo: "" };
               const aprobadoSinCond =
-                intentado && st.decision === "APROBADO" && st.condicion.trim() === "";
+                intentado && st.decision === "APROBADO" && st.condicion.trim() === "" && !esProb(it.id);
               return (
                 <tr
                   key={it.id}
@@ -196,7 +202,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
                     {st.decision === "APROBADO" && (
                       <input
                         autoFocus
-                        placeholder="Condición (ej: 50%, 2x1)"
+                        placeholder={esProb(it.id) ? "Opcional (tester)" : "Condición (ej: 50%, 2x1)"}
                         value={st.condicion}
                         onChange={(e) => set(it.id, { condicion: e.target.value })}
                         className={`h-10 w-full rounded-md border px-2 text-base focus:ring-2 ${

@@ -27,6 +27,8 @@ export async function getPendientesPrecios(
   const where = {
     estadoDecision: "APROBADO" as const,
     cargadoERP: false,
+    // Los probadores (tester) no pasan por el ERP: se cierran en la vista de Testers.
+    motivo: { not: "PROBADOR" as const },
   };
 
   const [total, rows] = await Promise.all([
