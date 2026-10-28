@@ -12,6 +12,7 @@ export type BadgeCounts = {
   compradorPendientes?: number;
   preciosPendientes?: number;
   emailsDead?: number;
+  adminSinAsignar?: number;
 };
 
 export async function getBadgeCounts(
@@ -38,6 +39,9 @@ export async function getBadgeCounts(
   if (role === "ADMIN") {
     counts.emailsDead = await prisma.emailOutbox.count({
       where: { estado: "DEAD" },
+    });
+    counts.adminSinAsignar = await prisma.itemSolicitud.count({
+      where: { compradorId: null, estadoDecision: "PENDIENTE" },
     });
   }
 
