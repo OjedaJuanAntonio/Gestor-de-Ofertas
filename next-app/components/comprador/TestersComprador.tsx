@@ -9,6 +9,7 @@ import {
   type MarcarTesterResult,
 } from "@/lib/actions/testers";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const fmtFecha = (d: Date | null) =>
   d
@@ -24,6 +25,7 @@ export function TestersComprador({ items }: { items: ItemTester[] }) {
   const [marcados, setMarcados] = useState<Record<string, boolean>>({});
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<MarcarTesterResult | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const seleccionados = Object.keys(marcados).filter((id) => marcados[id]);
   const todosMarcados = items.length > 0 && items.every((it) => marcados[it.id]);
@@ -38,8 +40,13 @@ export function TestersComprador({ items }: { items: ItemTester[] }) {
     }
   }
 
-  async function confirmar() {
+  function pedirConfirmacion() {
     if (seleccionados.length === 0) return;
+    setConfirmando(true);
+  }
+
+  async function ejecutar() {
+    setConfirmando(false);
     setEnviando(true);
     setResultado(null);
     try {
@@ -140,7 +147,7 @@ export function TestersComprador({ items }: { items: ItemTester[] }) {
 
       <div className="flex items-center justify-end rounded-xl border border-slate-200 bg-white p-4">
         <Button
-          onClick={confirmar}
+          onClick={pedirConfirmacion}
           disabled={enviando || seleccionados.length === 0}
           className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
         >
@@ -152,6 +159,20 @@ export function TestersComprador({ items }: { items: ItemTester[] }) {
           Marcar como enviados ({seleccionados.length})
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmando}
+        title="Marcar testers como enviados"
+        message={
+          <>
+            Vas a marcar <strong>{seleccionados.length}</strong> tester(s) como enviados a la
+            farmacia. Al cerrarse una solicitud se le notifica. Esta acción es definitiva.
+          </>
+        }
+        confirmLabel="Marcar enviados"
+        onConfirm={ejecutar}
+        onCancel={() => setConfirmando(false)}
+      />
 
       {resultado && (
         <div

@@ -11,6 +11,7 @@ import {
   type ConfirmarDecisionesResult,
 } from "@/lib/actions/decisiones";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 type Decision = "APROBADO" | "RECHAZADO";
 type DecisionState = { decision?: Decision; condicion: string; motivoRechazo: string };
@@ -27,6 +28,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<ConfirmarDecisionesResult | null>(null);
   const [intentado, setIntentado] = useState(false);
+  const [confirmando, setConfirmando] = useState(false);
 
   // Un probador (tester) no requiere condición comercial al aprobar.
   const esProb = useMemo(() => {
@@ -63,11 +65,18 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
     ([id, s]) => s.decision === "APROBADO" && s.condicion.trim() === "" && !esProb(id),
   );
 
-  async function confirmar() {
+  function pedirConfirmacion() {
     setIntentado(true);
     if (conDecision.length === 0) return;
     if (aprobadosSinCondicion.length > 0) return; // bloquea: condición obligatoria
+    setConfirmando(true);
+  }
 
+  const aprobadosCount = conDecision.filter(([, s]) => s.decision === "APROBADO").length;
+  const rechazadosCount = conDecision.length - aprobadosCount;
+
+  async function ejecutar() {
+    setConfirmando(false);
     setEnviando(true);
     setResultado(null);
     try {
@@ -230,7 +239,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
 
       <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <Button
-          onClick={confirmar}
+          onClick={pedirConfirmacion}
           disabled={enviando || conDecision.length === 0}
           className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
         >
@@ -238,6 +247,21 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
           Confirmar decisiones ({conDecision.length})
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmando}
+        title="Confirmar decisiones"
+        message={
+          <>
+            Vas a confirmar <strong>{conDecision.length}</strong> decisión(es):{" "}
+            <strong>{aprobadosCount}</strong> aprobada(s) y{" "}
+            <strong>{rechazadosCount}</strong> rechazada(s). Esta acción es definitiva.
+          </>
+        }
+        confirmLabel="Confirmar"
+        onConfirm={ejecutar}
+        onCancel={() => setConfirmando(false)}
+      />
 
       {resultado && (
         <div
