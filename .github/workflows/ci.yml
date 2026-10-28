@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    name: typecheck · lint · test
+    runs-on: ubuntu-latest
+
+    # Postgres para los tests de integración (Vitest) — coincide con docker-compose.yml.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gestor
+          POSTGRES_PASSWORD: gestor_dev
+          POSTGRES_DB: gestor_ofertas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gestor -d gestor_ofertas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://gestor:gestor_dev@localhost:5432/gestor_ofertas
+      DIRECT_URL: postgresql://gestor:gestor_dev@localhost:5432/gestor_ofertas
+      AUTH_SECRET: ci-secret-de-32-caracteres-o-mas-para-el-pipeline
+      EMAIL_DRY_RUN: "true"
+
+    defaults:
+      run:
+        working-directory: next-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: next-app/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Aplicar migraciones
+        run: npx prisma migrate deploy
+
+      - name: Seed (requerido por los tests de integración)
+        run: npx prisma db seed
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Tests (unit + integración)
+        run: npm test
