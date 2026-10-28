@@ -12,6 +12,7 @@ import {
   CheckSquare,
   BarChart3,
   Mail,
+  UserX,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -31,6 +32,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Usuarios",        href: "/admin/usuarios",  icon: Users },
     { label: "Farmacias",       href: "/admin/farmacias", icon: Package },
     { label: "Artículos / CSV", href: "/admin/articulos", icon: Upload },
+    { label: "Sin asignar",     href: "/admin/sin-asignar", icon: UserX },
     { label: "Correos",         href: "/admin/correos",   icon: Mail },
   ],
   FARMACIA: [
