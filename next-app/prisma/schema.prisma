@@ -49,6 +49,7 @@ enum MotivoSolicitud {
   VENCIMIENTO_PROXIMO
   STOCK_INMOVILIZADO
   SOBRESTOCK
+  PROBADOR // Tester (producto real que se envía a la farmacia para probar); no pasa por el ERP
 }
 
 /// Tipos de correo que pasan por el outbox.
@@ -208,6 +209,11 @@ model ItemSolicitud {
   // Cierre por el área de Precios.
   cargadoERP    Boolean   @default(false)
   fechaCargaERP DateTime?
+
+  // Cierre de probadores/tester (motivo PROBADOR): no pasan por el ERP,
+  // se cierran cuando el comprador marca que se envió el tester.
+  testerEnviado      Boolean   @default(false)
+  fechaTesterEnviado DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

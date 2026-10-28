@@ -544,8 +544,8 @@ export function GrillaCarga({
           <h2 className="text-xl font-bold text-slate-800">Confirmar envío</h2>
           <p className="mt-2 text-base text-slate-600">
             Vas a enviar <strong>{filasActivas.length}</strong> ítem(s) de{" "}
-            <strong>{farmaciaSel?.nombre}</strong>. Los compradores serán
-            notificados automáticamente.
+            <strong>{farmaciaSel?.nombre}</strong>. Los ítems se distribuyen a la
+            bandeja de cada comprador según el laboratorio.
           </p>
           <div className="mt-5 flex justify-end gap-3">
             <Button variant="ghost" onClick={() => setConfirmando(false)}>
@@ -572,9 +572,9 @@ export function GrillaCarga({
               </p>
               {!resultado.duplicada && (
                 <p className="mt-1 text-base text-slate-500">
-                  {resultado.compradoresNotificados} comprador(es) notificado(s)
+                  {resultado.compradoresConItems} comprador(es) con ítems en su bandeja
                   {resultado.itemsSinComprador > 0 &&
-                    ` · ${resultado.itemsSinComprador} ítem(s) sin comprador (avisado a admin)`}
+                    ` · ${resultado.itemsSinComprador} ítem(s) sin comprador (quedan en "Sin asignar")`}
                 </p>
               )}
               <Button

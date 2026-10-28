@@ -8,7 +8,6 @@ import { lookupArticulo } from "@/lib/data/articulos";
 import { validateRow } from "@/lib/business/grid";
 import { generateSolicitudCodigo } from "@/lib/business/solicitud";
 import { agruparPorComprador } from "@/lib/business/multicomprador";
-import { dedupNotifComprador } from "@/lib/business/email-keys";
 
 // ─────────────────────────────────────────────────────────────
 // enviarSolicitud — Server Action transaccional (Módulo 1).
@@ -24,7 +23,7 @@ import { dedupNotifComprador } from "@/lib/business/email-keys";
 const RowSchema = z.object({
   codigoBarra: z.string().min(1),
   cantidad: z.number().int().positive(),
-  motivo: z.enum(["VENCIMIENTO_PROXIMO", "STOCK_INMOVILIZADO", "SOBRESTOCK"]),
+  motivo: z.enum(["VENCIMIENTO_PROXIMO", "STOCK_INMOVILIZADO", "SOBRESTOCK", "PROBADOR"]),
   fechaVencimiento: z.string().optional().default(""),
   observaciones: z.string().optional().default(""),
 });
@@ -43,7 +42,7 @@ export type EnviarSolicitudResult =
       ok: true;
       codigo: string;
       totalItems: number;
-      compradoresNotificados: number;
+      compradoresConItems: number;
       itemsSinComprador: number;
       duplicada: boolean;
     }
@@ -80,7 +79,7 @@ export async function enviarSolicitud(
       ok: true,
       codigo: existente.codigo,
       totalItems: existente._count.items,
-      compradoresNotificados: 0,
+      compradoresConItems: 0,
       itemsSinComprador: 0,
       duplicada: true,
     };
@@ -178,24 +177,10 @@ export async function enviarSolicitud(
         select: { id: true },
       });
 
-      // Encola un correo por comprador (con dedupKey anti-duplicado).
-      for (const g of grupos) {
-        await tx.emailOutbox.create({
-          data: {
-            tipo: "NOTIF_COMPRADOR",
-            destinatario: g.compradorMail,
-            asunto: `Tenés ${g.items.length} ítem(s) nuevos en ${codigo}`,
-            dedupKey: dedupNotifComprador(solicitud.id, g.compradorId),
-            payload: {
-              solicitudId: solicitud.id,
-              codigo,
-              compradorId: g.compradorId,
-              cantidad: g.items.length,
-              farmacia: farmacia.nombre,
-            } as Prisma.InputJsonValue,
-          },
-        });
-      }
+      // Nota: NO se notifica por mail a los compradores (decisión de negocio,
+      // igual que en el flujo de producción: evita saturarlos). Ven sus ítems
+      // nuevos directamente en la bandeja. Solo se encolan correos a la farmacia
+      // en el cierre (consolidado / rechazo total).
 
       await tx.auditLog.create({
         data: {
@@ -225,7 +210,7 @@ export async function enviarSolicitud(
           ok: true,
           codigo: dup.codigo,
           totalItems: dup._count.items,
-          compradoresNotificados: 0,
+          compradoresConItems: 0,
           itemsSinComprador: 0,
           duplicada: true,
         };
@@ -239,7 +224,7 @@ export async function enviarSolicitud(
     ok: true,
     codigo,
     totalItems: itemsResueltos.length,
-    compradoresNotificados: grupos.length,
+    compradoresConItems: grupos.length,
     itemsSinComprador: sinComprador.length,
     duplicada: false,
   };

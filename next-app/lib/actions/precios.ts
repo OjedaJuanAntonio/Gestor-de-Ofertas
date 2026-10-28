@@ -44,7 +44,7 @@ export async function confirmarCargasERP(
   // Verifica que sean aprobados y aún no cargados (optimistic check).
   const items = await prisma.itemSolicitud.findMany({
     where: { id: { in: itemIds } },
-    select: { id: true, estadoDecision: true, cargadoERP: true, solicitudId: true },
+    select: { id: true, estadoDecision: true, cargadoERP: true, solicitudId: true, motivo: true },
   });
   if (items.length !== itemIds.length) {
     return { ok: false, error: "Algunos ítems ya no existen. Refrescá." };
@@ -52,6 +52,11 @@ export async function confirmarCargasERP(
   const invalido = items.find((it) => it.estadoDecision !== "APROBADO" || it.cargadoERP);
   if (invalido) {
     return { ok: false, error: "Algunos ítems ya estaban cargados o no están aprobados. Refrescá." };
+  }
+  // Los probadores (tester) no pasan por el ERP; se cierran en la vista de Testers.
+  const probador = items.find((it) => it.motivo === "PROBADOR");
+  if (probador) {
+    return { ok: false, error: "Los probadores se gestionan en Testers, no en carga ERP." };
   }
 
   const ahora = new Date();
@@ -92,6 +97,8 @@ export async function confirmarCargasERP(
               select: {
                 estadoDecision: true,
                 cargadoERP: true,
+                motivo: true,
+                testerEnviado: true,
                 cantidad: true,
                 codigoBarra: true,
                 condicionAutorizada: true,

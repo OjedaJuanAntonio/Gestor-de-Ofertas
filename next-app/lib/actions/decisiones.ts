@@ -17,17 +17,15 @@ import { dedupRechazoTotal } from "@/lib/business/email-keys";
 // donde estas solicitudes nunca cerraban). Todo en una transacción.
 // ─────────────────────────────────────────────────────────────
 
-const DecisionSchema = z
-  .object({
-    itemId: z.string().min(1),
-    decision: z.enum(["APROBADO", "RECHAZADO"]),
-    condicion: z.string().optional().default(""),
-    motivoRechazo: z.string().optional().default(""),
-  })
-  .refine(
-    (d) => d.decision !== "APROBADO" || d.condicion.trim().length > 0,
-    { message: "La condición es obligatoria al aprobar.", path: ["condicion"] },
-  );
+// La condición obligatoria al aprobar NO se valida acá: depende del motivo del
+// ítem (un PROBADOR/tester no lleva condición comercial), que se conoce recién
+// tras leer los ítems de la DB (ver más abajo).
+const DecisionSchema = z.object({
+  itemId: z.string().min(1),
+  decision: z.enum(["APROBADO", "RECHAZADO"]),
+  condicion: z.string().optional().default(""),
+  motivoRechazo: z.string().optional().default(""),
+});
 
 const InputSchema = z.object({
   decisiones: z.array(DecisionSchema).min(1, "No hay decisiones para confirmar."),
@@ -56,7 +54,7 @@ export async function confirmarDecisiones(
   // Verifica propiedad + estado PENDIENTE de todos los ítems.
   const items = await prisma.itemSolicitud.findMany({
     where: { id: { in: ids } },
-    select: { id: true, compradorId: true, estadoDecision: true, solicitudId: true },
+    select: { id: true, compradorId: true, estadoDecision: true, solicitudId: true, motivo: true },
   });
   if (items.length !== ids.length) {
     return { ok: false, error: "Algunos ítems ya no existen. Refrescá la bandeja." };
@@ -68,6 +66,18 @@ export async function confirmarDecisiones(
   const yaDecidido = items.find((it) => it.estadoDecision !== "PENDIENTE");
   if (yaDecidido) {
     return { ok: false, error: "Algunos ítems ya fueron decididos. Refrescá la bandeja." };
+  }
+
+  // La condición es obligatoria al aprobar, salvo en probadores (tester).
+  const motivoById = new Map(items.map((it) => [it.id, it.motivo]));
+  const faltaCondicion = decisiones.find(
+    (d) =>
+      d.decision === "APROBADO" &&
+      motivoById.get(d.itemId) !== "PROBADOR" &&
+      d.condicion.trim().length === 0,
+  );
+  if (faltaCondicion) {
+    return { ok: false, error: "La condición es obligatoria al aprobar (excepto probadores)." };
   }
 
   const ahora = new Date();
@@ -84,7 +94,7 @@ export async function confirmarDecisiones(
           data: {
             estadoDecision: d.decision,
             condicionAutorizada:
-              d.decision === "APROBADO" ? d.condicion.trim() : null,
+              d.decision === "APROBADO" ? d.condicion.trim() || null : null,
             motivoRechazo:
               d.decision === "RECHAZADO" ? d.motivoRechazo.trim() || null : null,
             aprobadorId: user.id,
@@ -118,7 +128,7 @@ export async function confirmarDecisiones(
             estado: true,
             mailFarmaciaEnviado: true,
             emailFarmaciaHistorico: true,
-            items: { select: { estadoDecision: true, cargadoERP: true } },
+            items: { select: { estadoDecision: true, cargadoERP: true, motivo: true, testerEnviado: true } },
           },
         });
         if (!sol) continue;

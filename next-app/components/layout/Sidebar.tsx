@@ -13,6 +13,7 @@ import {
   BarChart3,
   Mail,
   UserX,
+  FlaskConical,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -41,6 +42,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   COMPRADOR: [
     { label: "Bandeja de Entrada", href: "/comprador/bandeja", icon: Inbox },
+    { label: "Testers", href: "/comprador/testers", icon: FlaskConical },
   ],
   PRECIOS: [
     { label: "Dashboard ERP", href: "/precios/dashboard", icon: CheckSquare },

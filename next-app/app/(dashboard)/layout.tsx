@@ -28,6 +28,7 @@ export default async function DashboardLayout({
   if (counts.preciosPendientes) badges["/precios/dashboard"] = counts.preciosPendientes;
   if (counts.emailsDead) badges["/admin/correos"] = counts.emailsDead;
   if (counts.adminSinAsignar) badges["/admin/sin-asignar"] = counts.adminSinAsignar;
+  if (counts.testersPendientes) badges["/comprador/testers"] = counts.testersPendientes;
 
   return (
     <div className="flex min-h-screen bg-slate-100">

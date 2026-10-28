@@ -63,13 +63,18 @@ export const MOTIVOS: { value: MotivoSolicitud; label: string }[] = [
   { value: "VENCIMIENTO_PROXIMO", label: "Vencimiento próximo" },
   { value: "STOCK_INMOVILIZADO", label: "Stock inmovilizado" },
   { value: "SOBRESTOCK", label: "Sobrestock" },
+  { value: "PROBADOR", label: "Probador / Tester" },
 ];
 
 export const MOTIVO_LABEL: Record<MotivoSolicitud, string> = {
   VENCIMIENTO_PROXIMO: "Vencimiento próximo",
   STOCK_INMOVILIZADO: "Stock inmovilizado",
   SOBRESTOCK: "Sobrestock",
+  PROBADOR: "Probador / Tester",
 };
+
+/** Un motivo PROBADOR (tester) no pasa por el ERP ni requiere condición comercial. */
+export const esProbador = (motivo: MotivoSolicitud): boolean => motivo === "PROBADOR";
 
 export const ESTADO_DECISION_LABEL: Record<EstadoDecision, string> = {
   PENDIENTE: "Pendiente",
