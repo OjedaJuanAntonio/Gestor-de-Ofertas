@@ -9,6 +9,7 @@ import {
   type ConfirmarCargasResult,
 } from "@/lib/actions/precios";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const fmtFecha = (d: Date | null) =>
   d
@@ -34,6 +35,7 @@ export function PanelPrecios({
   const [marcados, setMarcados] = useState<Record<string, boolean>>({});
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<ConfirmarCargasResult | null>(null);
+  const [confirmando, setConfirmando] = useState(false);
 
   const seleccionados = Object.keys(marcados).filter((id) => marcados[id]);
   const todosMarcados = items.length > 0 && items.every((it) => marcados[it.id]);
@@ -48,8 +50,13 @@ export function PanelPrecios({
     }
   }
 
-  async function confirmar() {
+  function pedirConfirmacion() {
     if (seleccionados.length === 0) return;
+    setConfirmando(true);
+  }
+
+  async function ejecutar() {
+    setConfirmando(false);
     setEnviando(true);
     setResultado(null);
     try {
@@ -156,7 +163,7 @@ export function PanelPrecios({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
         <Paginador page={page} pages={pages} />
         <Button
-          onClick={confirmar}
+          onClick={pedirConfirmacion}
           disabled={enviando || seleccionados.length === 0}
           className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
         >
@@ -168,6 +175,21 @@ export function PanelPrecios({
           Confirmar cargas en sistema ({seleccionados.length})
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmando}
+        title="Confirmar cargas en el ERP"
+        message={
+          <>
+            Vas a marcar <strong>{seleccionados.length}</strong> ítem(s) como cargados en el
+            sistema. Al cerrarse una solicitud se le notifica a la farmacia. Esta acción es
+            definitiva.
+          </>
+        }
+        confirmLabel="Confirmar cargas"
+        onConfirm={ejecutar}
+        onCancel={() => setConfirmando(false)}
+      />
 
       {resultado && (
         <div
