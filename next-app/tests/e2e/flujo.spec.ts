@@ -43,6 +43,9 @@ test.describe.serial("Flujo completo de oferta", () => {
     await page.locator('input[type="number"]').first().fill("12");
     await page.locator("select").nth(1).selectOption("SOBRESTOCK");
 
+    // La fecha de vencimiento es obligatoria para todo motivo salvo PROBADOR.
+    await page.getByPlaceholder("MM/AA").first().fill("10/27");
+
     // Enviar + confirmar.
     await page.getByRole("button", { name: /Enviar solicitud/ }).click();
     await page.getByRole("button", { name: "Confirmar y enviar" }).click();
