@@ -14,6 +14,7 @@ import {
   Mail,
   UserX,
   FlaskConical,
+  History,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -43,6 +44,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   COMPRADOR: [
     { label: "Bandeja de Entrada", href: "/comprador/bandeja", icon: Inbox },
     { label: "Testers", href: "/comprador/testers", icon: FlaskConical },
+    { label: "Historial", href: "/comprador/historial", icon: History },
   ],
   PRECIOS: [
     { label: "Carga ERP", href: "/precios/dashboard", icon: CheckSquare },

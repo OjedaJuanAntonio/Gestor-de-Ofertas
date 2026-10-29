@@ -76,11 +76,12 @@ export const PAGE_SIZE = 50;
 
 export async function getHistoricoComprador(
   compradorId: string,
-  page = 1,
+  opts: { page?: number; estado?: "APROBADO" | "RECHAZADO" | null } = {},
 ): Promise<{ items: HistoricoItem[]; total: number; page: number; pages: number }> {
+  const page = Math.max(1, opts.page ?? 1);
   const where: Prisma.ItemSolicitudWhereInput = {
     compradorId,
-    estadoDecision: { in: ["APROBADO", "RECHAZADO"] },
+    estadoDecision: opts.estado ? opts.estado : { in: ["APROBADO", "RECHAZADO"] },
   };
   const [total, rows] = await Promise.all([
     prisma.itemSolicitud.count({ where }),
