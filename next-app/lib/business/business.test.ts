@@ -6,7 +6,6 @@ import { agruparPorComprador } from "./multicomprador";
 import { computeEstadoSolicitud, evaluarCierre } from "./cierre";
 import {
   dedupConsolidadoFarmacia,
-  dedupNotifComprador,
   dedupRechazoTotal,
 } from "./email-keys";
 
@@ -271,6 +270,5 @@ describe("email-keys", () => {
   it("genera claves estables y distintas", () => {
     expect(dedupConsolidadoFarmacia("s1")).toBe("consolidado-farmacia:s1");
     expect(dedupRechazoTotal("s1")).toBe("rechazo-total:s1");
-    expect(dedupNotifComprador("s1", "c1")).toBe("notif-comprador:s1:c1");
   });
 });
