@@ -45,7 +45,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Testers", href: "/comprador/testers", icon: FlaskConical },
   ],
   PRECIOS: [
-    { label: "Dashboard ERP", href: "/precios/dashboard", icon: CheckSquare },
+    { label: "Carga ERP", href: "/precios/dashboard", icon: CheckSquare },
   ],
 };
 
