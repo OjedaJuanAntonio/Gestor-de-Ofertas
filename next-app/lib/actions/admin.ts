@@ -59,7 +59,7 @@ export async function toggleFarmacia(id: number, activa: boolean): Promise<Resul
 const UsuarioSchema = z.object({
   email: z.string().email("Email inválido."),
   nombre: z.string().min(2, "Nombre demasiado corto."),
-  password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
+  password: z.string().min(10, "La contraseña debe tener al menos 10 caracteres."),
   role: z.enum(["ADMIN", "FARMACIA", "COMPRADOR", "PRECIOS"]),
   farmaciaId: z.number().int().positive().optional().nullable(),
   laboratorios: z.array(z.string().min(1)).optional().default([]),

@@ -4,6 +4,11 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
+import {
+  loginBloqueado,
+  registrarFallo,
+  limpiarIntentos,
+} from "@/lib/login-throttle";
 
 // ─────────────────────────────────────────────────────────────
 // lib/auth.ts — Configuración completa de NextAuth
@@ -30,7 +35,11 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
-        const { email, password } = parsed.data;
+        const { password } = parsed.data;
+        const email = parsed.data.email.trim().toLowerCase();
+
+        // Freno a fuerza bruta: bloquea tras demasiados intentos fallidos.
+        if (loginBloqueado(email)) return null;
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -45,11 +54,18 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           },
         });
 
-        if (!user || !user.activo) return null;
+        if (!user || !user.activo) {
+          registrarFallo(email);
+          return null;
+        }
 
         const passwordMatch = await bcrypt.compare(password, user.password);
-        if (!passwordMatch) return null;
+        if (!passwordMatch) {
+          registrarFallo(email);
+          return null;
+        }
 
+        limpiarIntentos(email);
         return {
           id: user.id,
           email: user.email,
