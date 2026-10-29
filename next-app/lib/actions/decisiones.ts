@@ -88,9 +88,11 @@ export async function confirmarDecisiones(
   try {
     await prisma.$transaction(async (tx) => {
       // 1) Actualiza cada ítem con su decisión + snapshot del aprobador.
+      // Guardado contra carreras: solo si el ítem sigue PENDIENTE (cierra la
+      // ventana TOCTOU entre la lectura previa y la transacción).
       for (const d of decisiones) {
-        await tx.itemSolicitud.update({
-          where: { id: d.itemId },
+        const upd = await tx.itemSolicitud.updateMany({
+          where: { id: d.itemId, estadoDecision: "PENDIENTE" },
           data: {
             estadoDecision: d.decision,
             condicionAutorizada:
@@ -102,6 +104,7 @@ export async function confirmarDecisiones(
             fechaAprobacion: ahora,
           },
         });
+        if (upd.count === 0) throw new Error("CARRERA");
         await tx.auditLog.create({
           data: {
             entityType: "ItemSolicitud",
@@ -162,6 +165,9 @@ export async function confirmarDecisiones(
       }
     });
   } catch (e) {
+    if (e instanceof Error && e.message === "CARRERA") {
+      return { ok: false, error: "Algunos ítems ya fueron decididos. Refrescá la bandeja." };
+    }
     console.error("[confirmarDecisiones] error:", e);
     return { ok: false, error: "No se pudieron guardar las decisiones. Reintentá." };
   }
