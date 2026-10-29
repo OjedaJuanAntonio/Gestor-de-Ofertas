@@ -178,6 +178,8 @@ export function PanelPrecios({
                   <th className="border-r border-slate-200 px-3 py-2 min-w-[240px]">Producto</th>
                   <th className="border-r border-slate-200 px-3 py-2">Laboratorio</th>
                   <th className="border-r border-slate-200 px-3 py-2 w-16 text-center">Cant.</th>
+                  {/* EAN inmediatamente a la izquierda de Condición (igual que el Excel, para la macro del ERP). */}
+                  <th className="border-r border-slate-200 px-3 py-2">EAN</th>
                   <th className="border-r border-slate-200 px-3 py-2">Condición</th>
                   <th className="px-3 py-2 w-24">Aprobado</th>
                 </tr>
@@ -213,13 +215,15 @@ export function PanelPrecios({
                       </td>
                       <td className="border-r border-slate-100 px-3 py-2">
                         <span className="font-medium text-slate-800">{it.descripcion}</span>
-                        <span className="ml-2 font-mono text-xs text-slate-400">{it.codigoBarra}</span>
                       </td>
                       <td className="border-r border-slate-100 px-3 py-2 text-slate-600">
                         {it.laboratorio}
                       </td>
                       <td className="border-r border-slate-100 px-3 py-2 text-center font-semibold text-slate-800">
                         {it.cantidad}
+                      </td>
+                      <td className="border-r border-slate-100 px-3 py-2 font-mono text-xs text-slate-500">
+                        {it.codigoBarra}
                       </td>
                       <td className="border-r border-slate-100 px-3 py-2">
                         <span className="inline-block rounded bg-green-100 px-2 py-0.5 font-semibold text-green-800">
