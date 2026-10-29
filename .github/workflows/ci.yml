@@ -68,3 +68,60 @@ jobs:
 
       - name: Build (next build)
         run: npm run build
+
+  e2e:
+    name: e2e (Playwright + axe)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gestor
+          POSTGRES_PASSWORD: gestor_dev
+          POSTGRES_DB: gestor_ofertas
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gestor -d gestor_ofertas"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://gestor:gestor_dev@localhost:5432/gestor_ofertas
+      DIRECT_URL: postgresql://gestor:gestor_dev@localhost:5432/gestor_ofertas
+      AUTH_SECRET: ci-secret-de-32-caracteres-o-mas-para-el-pipeline
+      AUTH_URL: http://localhost:3000
+      EMAIL_DRY_RUN: "true"
+
+    defaults:
+      run:
+        working-directory: next-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: next-app/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Generar cliente Prisma
+        run: npx prisma generate
+
+      - name: Aplicar migraciones
+        run: npx prisma migrate deploy
+
+      - name: Seed
+        run: npx prisma db seed
+
+      - name: Instalar navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E (Playwright levanta el dev server)
+        run: npm run test:e2e

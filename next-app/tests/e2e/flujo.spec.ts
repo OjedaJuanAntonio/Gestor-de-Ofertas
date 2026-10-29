@@ -64,6 +64,8 @@ test.describe.serial("Flujo completo de oferta", () => {
       .first()
       .fill("50% OFF");
     await page.getByRole("button", { name: /Confirmar decisiones/ }).click();
+    // Diálogo de confirmación "¿estás seguro?".
+    await page.getByRole("button", { name: "Confirmar", exact: true }).click();
 
     await expect(page.getByText("Decisiones guardadas")).toBeVisible();
   });
@@ -79,6 +81,8 @@ test.describe.serial("Flujo completo de oferta", () => {
     await page
       .getByRole("button", { name: /Confirmar cargas en sistema/ })
       .click();
+    // Diálogo de confirmación "¿estás seguro?".
+    await page.getByRole("button", { name: "Confirmar cargas", exact: true }).click();
 
     await expect(page.getByText("Cargas confirmadas")).toBeVisible();
   });
