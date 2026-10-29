@@ -27,15 +27,19 @@ export async function GET() {
   wb.created = new Date();
   const ws = wb.addWorksheet("Pendientes de carga");
 
+  // IMPORTANTE: CODIGO_BARRA (EAN) y CONDICION van PEGADAS, con CONDICION
+  // inmediatamente a la DERECHA del EAN. La macro del ERP (externa a esta app)
+  // selecciona la celda del EAN y toma el descuento de la celda contigua a la
+  // derecha; no mover ni intercalar columnas entre ambas.
   ws.columns = [
     { header: COL_ID, key: "id", width: 28 },
     { header: "SOLICITUD", key: "solicitud", width: 22 },
     { header: "FARMACIA", key: "farmacia", width: 26 },
     { header: "CODIGO_BARRA", key: "codigoBarra", width: 16 },
+    { header: "CONDICION", key: "condicion", width: 14 },
     { header: "DESCRIPCION", key: "descripcion", width: 40 },
     { header: "LABORATORIO", key: "laboratorio", width: 18 },
     { header: "CANTIDAD", key: "cantidad", width: 10 },
-    { header: "CONDICION", key: "condicion", width: 14 },
     { header: "FECHA_APROBACION", key: "fechaAprobacion", width: 18 },
     { header: COL_CARGADO, key: "cargado", width: 12 },
   ];
