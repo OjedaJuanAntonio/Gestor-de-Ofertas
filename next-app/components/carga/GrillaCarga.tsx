@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Loader2, Plus, Trash2, AlertTriangle, CheckCircle2, Send } from "lucide-react";
 import type { FarmaciaOption } from "@/lib/data/farmacias";
 import type { ArticuloLookup, MotivoSolicitud } from "@/types";
@@ -34,9 +34,9 @@ type Fila = {
 
 const DRAFT_KEY = "carga-draft-v1";
 
-function filaNueva(): Fila {
+function filaNueva(id: string = crypto.randomUUID()): Fila {
   return {
-    id: crypto.randomUUID(),
+    id,
     codigoBarra: "",
     descripcion: "",
     laboratorio: "",
@@ -63,11 +63,16 @@ export function GrillaCarga({
   farmacias: FarmaciaOption[];
   farmaciaFija: number | null;
 }) {
+  // Prefijo estable entre server y cliente para el id de la fila inicial: con
+  // crypto.randomUUID() en el render, server y cliente generaban ids distintos
+  // y React tiraba un hydration mismatch en los <input id={`ean-...`}>. Las
+  // filas que se agregan después son solo-cliente y pueden usar UUID aleatorio.
+  const baseId = useId();
   const [farmaciaId, setFarmaciaId] = useState<number | "">(
     farmaciaFija ?? "",
   );
   const [emailOverride, setEmailOverride] = useState("");
-  const [filas, setFilas] = useState<Fila[]>(nuevoLote);
+  const [filas, setFilas] = useState<Fila[]>(() => [filaNueva(`${baseId}-0`)]);
   const [idemKey, setIdemKey] = useState<string>(() => crypto.randomUUID());
   const [enviando, setEnviando] = useState(false);
   const [resultado, setResultado] = useState<EnviarSolicitudResult | null>(null);
