@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { getSolicitudesFarmacia } from "@/lib/data/farmacia";
 import { ESTADO_SOLICITUD_LABEL } from "@/types";
@@ -90,7 +91,14 @@ export default async function MisSolicitudesPage({
               <tbody>
                 {data.items.map((s) => (
                   <tr key={s.id} className="border-b border-slate-100">
-                    <td className="px-4 py-3 font-mono text-sm text-slate-700">{s.codigo}</td>
+                    <td className="px-4 py-3 font-mono text-sm">
+                    <Link
+                      href={`/farmacia/mis-solicitudes/${s.id}`}
+                      className="text-blue-600 hover:underline"
+                    >
+                      {s.codigo}
+                    </Link>
+                  </td>
                     <td className="px-4 py-3 text-slate-600">{fmt(s.fechaEnvio)}</td>
                     <td className="px-4 py-3 text-center font-semibold">{s.total}</td>
                     <td className="px-4 py-3 text-center text-green-600">{s.aprobados}</td>
