@@ -4,7 +4,8 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { lookupArticulo } from "@/lib/data/articulos";
+import { lookupArticulosBatch } from "@/lib/data/articulos";
+import { normalizeEan } from "@/lib/business/ean";
 import { validateRow } from "@/lib/business/grid";
 import { generateSolicitudCodigo } from "@/lib/business/solicitud";
 import { agruparPorComprador } from "@/lib/business/multicomprador";
@@ -109,9 +110,13 @@ export async function enviarSolicitud(
     laboratorio: string;
   }[] = [];
 
+  // Resolución por lotes: una query al maestro + una a compradores, en vez de
+  // 2×N (una por fila). Keyeado por EAN normalizado.
+  const porEan = await lookupArticulosBatch(data.rows.map((r) => r.codigoBarra));
+
   for (let i = 0; i < data.rows.length; i++) {
     const row = data.rows[i];
-    const articulo = await lookupArticulo(row.codigoBarra);
+    const articulo = porEan.get(normalizeEan(row.codigoBarra)) ?? null;
     const v = validateRow({
       codigoBarra: row.codigoBarra,
       articuloExiste: !!articulo,
