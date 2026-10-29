@@ -7,7 +7,7 @@ on:
 
 jobs:
   ci:
-    name: typecheck · lint · test
+    name: typecheck · lint · test · build
     runs-on: ubuntu-latest
 
     # Postgres para los tests de integración (Vitest) — coincide con docker-compose.yml.
@@ -65,3 +65,6 @@ jobs:
 
       - name: Tests (unit + integración)
         run: npm test
+
+      - name: Build (next build)
+        run: npm run build
