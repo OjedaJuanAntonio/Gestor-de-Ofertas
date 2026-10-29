@@ -53,8 +53,9 @@ enum MotivoSolicitud {
 }
 
 /// Tipos de correo que pasan por el outbox.
+/// (No existe notificación al comprador: ven sus ítems en la bandeja, igual
+/// que en el flujo de producción. Solo se le escribe a la farmacia.)
 enum EmailTipo {
-  NOTIF_COMPRADOR // "Tenés X ítems nuevos pendientes"
   CONSOLIDADO_FARMACIA // Cierre de ciclo con detalle final
   RECHAZO_TOTAL_FARMACIA // Solicitud 100% rechazada
 }

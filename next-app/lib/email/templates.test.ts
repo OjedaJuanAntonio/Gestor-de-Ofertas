@@ -2,18 +2,6 @@ import { describe, it, expect } from "vitest";
 import { renderEmail } from "./templates";
 
 describe("renderEmail", () => {
-  it("NOTIF_COMPRADOR incluye cantidad y código", () => {
-    const r = renderEmail("NOTIF_COMPRADOR", {
-      codigo: "SOL-123",
-      cantidad: 3,
-      farmacia: "Farmacia X",
-    });
-    expect(r.subject).toContain("SOL-123");
-    expect(r.subject).toContain("3");
-    expect(r.html).toContain("Farmacia X");
-    expect(r.text).toContain("SOL-123");
-  });
-
   it("CONSOLIDADO separa aprobados y rechazados", () => {
     const r = renderEmail("CONSOLIDADO_FARMACIA", {
       codigo: "SOL-9",
@@ -36,10 +24,19 @@ describe("renderEmail", () => {
   });
 
   it("escapa HTML para evitar inyección", () => {
-    const r = renderEmail("NOTIF_COMPRADOR", {
+    const r = renderEmail("CONSOLIDADO_FARMACIA", {
       codigo: "SOL-1",
-      cantidad: 1,
-      farmacia: "<script>alert(1)</script>",
+      farmacia: "Farmacia Z",
+      items: [
+        {
+          descripcion: "<script>alert(1)</script>",
+          codigoBarra: "1",
+          cantidad: 1,
+          estado: "APROBADO",
+          condicion: "10%",
+          motivoRechazo: null,
+        },
+      ],
     });
     expect(r.html).not.toContain("<script>alert(1)</script>");
     expect(r.html).toContain("&lt;script&gt;");
