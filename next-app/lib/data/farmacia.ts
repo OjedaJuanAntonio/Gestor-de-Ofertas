@@ -71,3 +71,93 @@ export async function getSolicitudesFarmacia(
     })),
   };
 }
+
+export type ItemSolicitudDetalle = {
+  id: string;
+  codigoBarra: string;
+  descripcion: string;
+  laboratorio: string;
+  cantidad: number;
+  motivo: string;
+  fechaVencimiento: string | null;
+  observaciones: string | null;
+  estadoDecision: string;
+  condicionAutorizada: string | null;
+  motivoRechazo: string | null;
+  testerEnviado: boolean;
+};
+
+export type SolicitudDetalle = {
+  id: string;
+  codigo: string;
+  fechaEnvio: Date;
+  estado: string;
+  farmaciaNombre: string;
+  items: ItemSolicitudDetalle[];
+};
+
+/**
+ * Detalle de una solicitud con sus ítems y el resultado de cada uno.
+ * `farmaciaId` acota el acceso: una farmacia solo ve sus propias solicitudes;
+ * pasar null (admin) permite ver cualquiera. Devuelve null si no existe o si
+ * no pertenece a la farmacia indicada.
+ */
+export async function getSolicitudDetalle(
+  id: string,
+  farmaciaId: number | null,
+): Promise<SolicitudDetalle | null> {
+  const sol = await prisma.solicitud.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      codigo: true,
+      fechaEnvio: true,
+      estado: true,
+      farmaciaId: true,
+      nombreFarmaciaHistorico: true,
+      items: {
+        orderBy: { id: "asc" },
+        select: {
+          id: true,
+          codigoBarra: true,
+          cantidad: true,
+          motivo: true,
+          fechaVencimiento: true,
+          observaciones: true,
+          estadoDecision: true,
+          condicionAutorizada: true,
+          motivoRechazo: true,
+          testerEnviado: true,
+          laboratorioHistorico: true,
+          articulo: { select: { descripcion: true } },
+        },
+      },
+    },
+  });
+
+  if (!sol) return null;
+  // Scoping: una farmacia solo puede ver lo suyo (admin pasa null y ve todo).
+  if (farmaciaId !== null && sol.farmaciaId !== farmaciaId) return null;
+
+  return {
+    id: sol.id,
+    codigo: sol.codigo,
+    fechaEnvio: sol.fechaEnvio,
+    estado: sol.estado,
+    farmaciaNombre: sol.nombreFarmaciaHistorico,
+    items: sol.items.map((i) => ({
+      id: i.id,
+      codigoBarra: i.codigoBarra,
+      descripcion: i.articulo.descripcion,
+      laboratorio: i.laboratorioHistorico,
+      cantidad: i.cantidad,
+      motivo: i.motivo,
+      fechaVencimiento: i.fechaVencimiento,
+      observaciones: i.observaciones,
+      estadoDecision: i.estadoDecision,
+      condicionAutorizada: i.condicionAutorizada,
+      motivoRechazo: i.motivoRechazo,
+      testerEnviado: i.testerEnviado,
+    })),
+  };
+}
