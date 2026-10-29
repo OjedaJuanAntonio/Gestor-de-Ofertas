@@ -68,3 +68,52 @@ export async function getPendientesPrecios(
     })),
   };
 }
+
+/** TODOS los ítems pendientes de carga (sin paginar), para exportar a Excel. */
+export async function getTodosPendientesPrecios(): Promise<ItemPrecios[]> {
+  const rows = await prisma.itemSolicitud.findMany({
+    where: {
+      estadoDecision: "APROBADO" as const,
+      cargadoERP: false,
+      motivo: { not: "PROBADOR" as const },
+    },
+    select: {
+      id: true,
+      codigoBarra: true,
+      cantidad: true,
+      condicionAutorizada: true,
+      fechaAprobacion: true,
+      laboratorioHistorico: true,
+      articulo: { select: { descripcion: true } },
+      solicitud: { select: { codigo: true, nombreFarmaciaHistorico: true } },
+    },
+    orderBy: [{ solicitud: { codigo: "asc" } }, { fechaAprobacion: "asc" }],
+  });
+
+  return rows.map((it) => ({
+    id: it.id,
+    codigoBarra: it.codigoBarra,
+    descripcion: it.articulo.descripcion,
+    laboratorio: it.laboratorioHistorico,
+    cantidad: it.cantidad,
+    condicionAutorizada: it.condicionAutorizada,
+    solicitudCodigo: it.solicitud.codigo,
+    farmaciaNombre: it.solicitud.nombreFarmaciaHistorico,
+    fechaAprobacion: it.fechaAprobacion,
+  }));
+}
+
+/** De un conjunto de ids, los que siguen pendientes de carga (válidos para marcar). */
+export async function filtrarPendientesValidos(ids: string[]): Promise<string[]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.itemSolicitud.findMany({
+    where: {
+      id: { in: ids },
+      estadoDecision: "APROBADO" as const,
+      cargadoERP: false,
+      motivo: { not: "PROBADOR" as const },
+    },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
