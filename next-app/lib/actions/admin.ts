@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseArticulosCsv } from "@/lib/import/articulos-csv";
+import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
 
 // ─────────────────────────────────────────────────────────────
@@ -53,6 +54,38 @@ export async function toggleFarmacia(id: number, activa: boolean): Promise<Resul
   await prisma.farmacia.update({ where: { id }, data: { activa } });
   revalidatePath("/admin/farmacias");
   return { ok: true };
+}
+
+// ── Import masivo de farmacias (CSV) ───────────────────────
+export type ImportFarmaciasResult =
+  | { ok: true; importados: number; omitidos: number; errores: { linea: number; motivo: string }[] }
+  | { ok: false; error: string };
+
+export async function importarFarmacias(csvText: string): Promise<ImportFarmaciasResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+
+  const { validos, errores } = parseFarmaciasCsv(csvText);
+  if (validos.length === 0)
+    return { ok: false, error: "No hay filas válidas para importar." };
+
+  try {
+    // createMany con skipDuplicates: las farmacias con nombre ya existente se
+    // omiten (nombre es @unique) en vez de fallar todo el lote.
+    const res = await prisma.farmacia.createMany({
+      data: validos.map((f) => ({ nombre: f.nombre, email: f.email })),
+      skipDuplicates: true,
+    });
+    revalidatePath("/admin/farmacias");
+    return {
+      ok: true,
+      importados: res.count,
+      omitidos: validos.length - res.count,
+      errores,
+    };
+  } catch {
+    return { ok: false, error: "Error al guardar las farmacias." };
+  }
 }
 
 // ── Usuarios ───────────────────────────────────────────────
@@ -107,6 +140,28 @@ export async function toggleUsuario(id: string, activo: boolean): Promise<Result
   await prisma.user.update({ where: { id }, data: { activo } });
   revalidatePath("/admin/usuarios");
   return { ok: true };
+}
+
+const ResetPasswordSchema = z.object({
+  id: z.string().min(1),
+  password: z.string().min(10, "La contraseña debe tener al menos 10 caracteres."),
+});
+
+export async function resetearPassword(
+  input: z.infer<typeof ResetPasswordSchema>,
+): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  const p = ResetPasswordSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  try {
+    const hash = await bcrypt.hash(p.data.password, 10);
+    await prisma.user.update({ where: { id: p.data.id }, data: { password: hash } });
+    revalidatePath("/admin/usuarios");
+    return { ok: true, mensaje: "Contraseña actualizada." };
+  } catch {
+    return { ok: false, error: "No se pudo actualizar la contraseña." };
+  }
 }
 
 // ── Import de artículos (CSV) ──────────────────────────────

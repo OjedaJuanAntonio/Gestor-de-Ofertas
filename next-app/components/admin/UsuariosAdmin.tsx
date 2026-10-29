@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { crearUsuario, toggleUsuario } from "@/lib/actions/admin";
+import { crearUsuario, toggleUsuario, resetearPassword } from "@/lib/actions/admin";
 import type { Role } from "@/types";
 import { Button } from "@/components/ui/button";
 
@@ -38,6 +38,22 @@ export function UsuariosAdmin({
   });
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [resetUser, setResetUser] = useState<{ id: string; nombre: string } | null>(null);
+  const [nuevaPass, setNuevaPass] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+
+  function hacerReset() {
+    if (!resetUser) return;
+    setResetError(null);
+    start(async () => {
+      const res = await resetearPassword({ id: resetUser.id, password: nuevaPass });
+      if (res.ok) {
+        setResetUser(null);
+        setNuevaPass("");
+        router.refresh();
+      } else setResetError(res.error);
+    });
+  }
 
   function crear() {
     setError(null);
@@ -127,7 +143,13 @@ export function UsuariosAdmin({
                     {u.activo ? "Activo" : "Inactivo"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => { setResetUser({ id: u.id, nombre: u.nombre }); setNuevaPass(""); setResetError(null); }}
+                    className="mr-4 text-sm font-semibold text-slate-600 hover:underline"
+                  >
+                    Resetear clave
+                  </button>
                   <ToggleBtn id={u.id} activo={u.activo} pending={pending} onToggle={(id, a) => start(async () => { await toggleUsuario(id, a); router.refresh(); })} />
                 </td>
               </tr>
@@ -135,6 +157,44 @@ export function UsuariosAdmin({
           </tbody>
         </table>
       </div>
+
+      {resetUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setResetUser(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-slate-800">Resetear contraseña</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Nueva contraseña para <strong>{resetUser.nombre}</strong> (mín. 10 caracteres).
+            </p>
+            <input
+              type="password"
+              autoFocus
+              value={nuevaPass}
+              onChange={(e) => setNuevaPass(e.target.value)}
+              placeholder="Nueva contraseña"
+              className="mt-4 h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+            />
+            {resetError && <p className="mt-2 text-sm font-semibold text-red-600">{resetError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setResetUser(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={hacerReset}
+                disabled={pending || nuevaPass.length < 10}
+              >
+                Guardar contraseña
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
