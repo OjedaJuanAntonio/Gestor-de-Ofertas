@@ -40,7 +40,9 @@ export function validateRow(row: GridRowInput): RowValidation {
 
   if (!row.motivo) return { ok: false, error: "Elegí un motivo" };
 
-  if (row.motivo === "VENCIMIENTO_PROXIMO") {
+  // La fecha de vencimiento es obligatoria para TODOS los motivos salvo
+  // PROBADOR/tester (un probador no tiene un vencimiento comercial relevante).
+  if (row.motivo !== "PROBADOR") {
     if (!row.fechaVencimiento?.trim())
       return { ok: false, error: "Falta la fecha de vencimiento (MM/AA)" };
     if (!isValidVencimiento(row.fechaVencimiento))

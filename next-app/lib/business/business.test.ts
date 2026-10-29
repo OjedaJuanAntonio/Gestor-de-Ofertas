@@ -65,7 +65,7 @@ describe("validateRow", () => {
     articuloExiste: true,
     cantidad: 5 as number | "",
     motivo: "SOBRESTOCK" as const,
-    fechaVencimiento: "",
+    fechaVencimiento: "10/27",
   };
 
   it("fila válida", () => {
@@ -88,21 +88,18 @@ describe("validateRow", () => {
   it("motivo faltante", () => {
     expect(validateRow({ ...base, motivo: "" }).error).toMatch(/motivo/i);
   });
-  it("vencimiento obligatorio si motivo es VENCIMIENTO_PROXIMO", () => {
-    expect(
-      validateRow({
-        ...base,
-        motivo: "VENCIMIENTO_PROXIMO",
-        fechaVencimiento: "",
-      }).ok,
-    ).toBe(false);
-    expect(
-      validateRow({
-        ...base,
-        motivo: "VENCIMIENTO_PROXIMO",
-        fechaVencimiento: "10/27",
-      }).ok,
-    ).toBe(true);
+  it("vencimiento obligatorio para todos los motivos salvo PROBADOR", () => {
+    // VENCIMIENTO_PROXIMO, STOCK_INMOVILIZADO y SOBRESTOCK: fecha requerida.
+    for (const motivo of ["VENCIMIENTO_PROXIMO", "STOCK_INMOVILIZADO", "SOBRESTOCK"] as const) {
+      expect(validateRow({ ...base, motivo, fechaVencimiento: "" }).ok).toBe(false);
+      expect(validateRow({ ...base, motivo, fechaVencimiento: "10/27" }).ok).toBe(true);
+    }
+  });
+  it("PROBADOR no exige fecha de vencimiento", () => {
+    expect(validateRow({ ...base, motivo: "PROBADOR", fechaVencimiento: "" }).ok).toBe(true);
+  });
+  it("fecha con formato inválido se rechaza (motivo no PROBADOR)", () => {
+    expect(validateRow({ ...base, motivo: "SOBRESTOCK", fechaVencimiento: "13/99" }).ok).toBe(false);
   });
   it("normaliza el código antes de validar (scanner con espacios)", () => {
     expect(validateRow({ ...base, codigoBarra: " 7791234567890 " }).ok).toBe(
@@ -117,7 +114,7 @@ describe("validateGrid", () => {
     articuloExiste: true,
     cantidad: 2 as number | "",
     motivo: "STOCK_INMOVILIZADO" as const,
-    fechaVencimiento: "",
+    fechaVencimiento: "10/27",
   };
   it("ok si todas válidas y hay al menos una", () => {
     expect(validateGrid([ok, ok]).ok).toBe(true);

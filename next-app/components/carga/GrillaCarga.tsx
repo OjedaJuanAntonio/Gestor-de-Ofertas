@@ -456,11 +456,14 @@ export function GrillaCarga({
                     <select
                       aria-label={`Motivo, fila ${idx + 1}`}
                       value={fila.motivo}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const motivo = e.target.value as MotivoSolicitud | "";
                         actualizarFila(fila.id, {
-                          motivo: e.target.value as MotivoSolicitud | "",
-                        })
-                      }
+                          motivo,
+                          // Un probador no lleva vencimiento: limpiamos la fecha al elegirlo.
+                          ...(motivo === "PROBADOR" ? { fechaVencimiento: "" } : {}),
+                        });
+                      }}
                       className="h-11 w-full rounded-md border border-slate-300 bg-white px-2 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
                     >
                       <option value="">— Motivo —</option>
@@ -479,7 +482,7 @@ export function GrillaCarga({
                       onChange={(e) =>
                         actualizarFila(fila.id, { fechaVencimiento: e.target.value })
                       }
-                      disabled={fila.motivo !== "VENCIMIENTO_PROXIMO"}
+                      disabled={fila.motivo === "PROBADOR"}
                       className="h-11 w-24 rounded-md border border-slate-300 px-2 text-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100"
                     />
                   </td>
