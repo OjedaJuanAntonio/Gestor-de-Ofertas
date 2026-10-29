@@ -32,21 +32,6 @@ export type ConsolidadoItem = {
   motivoRechazo: string | null;
 };
 
-function renderNotifComprador(p: Record<string, unknown>): RenderedEmail {
-  const codigo = esc(p.codigo);
-  const cantidad = Number(p.cantidad ?? 0);
-  const farmacia = esc(p.farmacia);
-  const subject = `Tenés ${cantidad} ítem(s) nuevos en ${p.codigo}`;
-  const cuerpo = `
-    <p>Tenés <strong>${cantidad} ítem(s)</strong> nuevos pendientes de revisión en la solicitud <strong>${codigo}</strong> de la farmacia <strong>${farmacia}</strong>.</p>
-    <p>Ingresá a tu bandeja para aprobarlos o rechazarlos.</p>`;
-  return {
-    subject,
-    html: layout("Nuevos ítems para revisar", cuerpo),
-    text: `Tenés ${cantidad} ítem(s) nuevos en ${p.codigo} (${p.farmacia}). Revisalos en tu bandeja.`,
-  };
-}
-
 function renderConsolidado(p: Record<string, unknown>): RenderedEmail {
   const codigo = esc(p.codigo);
   const items = (Array.isArray(p.items) ? p.items : []) as ConsolidadoItem[];
@@ -106,8 +91,6 @@ export function renderEmail(
   payload: Record<string, unknown>,
 ): RenderedEmail {
   switch (tipo) {
-    case "NOTIF_COMPRADOR":
-      return renderNotifComprador(payload);
     case "CONSOLIDADO_FARMACIA":
       return renderConsolidado(payload);
     case "RECHAZO_TOTAL_FARMACIA":
