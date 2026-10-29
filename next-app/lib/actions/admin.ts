@@ -122,23 +122,29 @@ export async function importarArticulos(csvText: string): Promise<ImportResult> 
   if (validos.length === 0)
     return { ok: false, error: "No hay filas válidas para importar." };
 
+  // Upsert por lotes: el maestro real tiene ~155.000 artículos y hacerlo en una
+  // sola transacción (una query por fila) excede tiempos/límites de Postgres.
+  // Cada lote va en su propia transacción acotada.
+  const LOTE = 1000;
   try {
-    // Upsert en bloque dentro de una transacción.
-    await prisma.$transaction(
-      validos.map((a) =>
-        prisma.articulo.upsert({
-          where: { codigoBarra: a.codigoBarra },
-          update: {
-            descripcion: a.descripcion,
-            laboratorio: a.laboratorio,
-            categoria: a.categoria,
-            stockReferencia: a.stockReferencia,
-            activo: true,
-          },
-          create: a,
-        }),
-      ),
-    );
+    for (let i = 0; i < validos.length; i += LOTE) {
+      const lote = validos.slice(i, i + LOTE);
+      await prisma.$transaction(
+        lote.map((a) =>
+          prisma.articulo.upsert({
+            where: { codigoBarra: a.codigoBarra },
+            update: {
+              descripcion: a.descripcion,
+              laboratorio: a.laboratorio,
+              categoria: a.categoria,
+              stockReferencia: a.stockReferencia,
+              activo: true,
+            },
+            create: a,
+          }),
+        ),
+      );
+    }
     invalidarTodosLosArticulos();
     revalidatePath("/admin/articulos");
     return { ok: true, importados: validos.length, errores };
