@@ -99,6 +99,10 @@ model User {
   nombre    String
   role      Role
   activo    Boolean  @default(true)
+  // Fuerza el cambio de contraseña en el próximo inicio de sesión (alta masiva
+  // con clave temporal, o reseteo del admin). Hasta cambiarla, el usuario es
+  // redirigido a /cambiar-clave y no puede usar el resto de la app.
+  mustChangePassword Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

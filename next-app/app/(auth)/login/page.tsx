@@ -20,6 +20,7 @@ function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  const cambiada = searchParams.get("cambiada") === "1";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,6 +74,11 @@ function LoginForm() {
           </CardHeader>
 
           <CardContent>
+            {cambiada && (
+              <p className="mb-4 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+                Contraseña actualizada. Iniciá sesión con tu nueva contraseña.
+              </p>
+            )}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
