@@ -92,4 +92,25 @@ describe("getHistoricoPrecios", () => {
     const r = await getHistoricoPrecios({ q: "NO-EXISTE-XYZ-123" });
     expect(r.items.length).toBe(0);
   });
+
+  it("un sort desconocido cae en el orden por defecto (no rompe)", async () => {
+    const r = await getHistoricoPrecios({ q: codigo, sort: "columna-invalida" });
+    expect(r.items.length).toBe(1);
+    expect(r.items[0].solicitudCodigo).toBe(codigo);
+  });
+
+  it("ordena por cantidad sin romper (cabecera de columna)", async () => {
+    const r = await getHistoricoPrecios({ q: codigo, sort: "cantidad", dir: "asc" });
+    expect(r.items.length).toBe(1);
+  });
+
+  it("filtra por rango de fechas: incluye hoy", async () => {
+    const r = await getHistoricoPrecios({ q: codigo, desde: "2020-01-01" });
+    expect(r.items.length).toBe(1);
+  });
+
+  it("filtra por rango de fechas: excluye con hasta en el pasado", async () => {
+    const r = await getHistoricoPrecios({ q: codigo, hasta: "2020-01-01" });
+    expect(r.items.length).toBe(0);
+  });
 });

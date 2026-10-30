@@ -1,6 +1,19 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizarDir, rangoFecha } from "./historial";
+
+// Columnas ordenables del historial de Precios (clic en la cabecera).
+const ORDEN_PRECIOS: Record<string, (dir: "asc" | "desc") => Prisma.ItemSolicitudOrderByWithRelationInput> = {
+  cargado: (dir) => ({ fechaCargaERP: dir }),
+  solicitud: (dir) => ({ solicitud: { codigo: dir } }),
+  farmacia: (dir) => ({ solicitud: { nombreFarmaciaHistorico: dir } }),
+  producto: (dir) => ({ articulo: { descripcion: dir } }),
+  laboratorio: (dir) => ({ laboratorioHistorico: dir }),
+  cantidad: (dir) => ({ cantidad: dir }),
+  ean: (dir) => ({ codigoBarra: dir }),
+  condicion: (dir) => ({ condicionAutorizada: dir }),
+};
 
 // ─────────────────────────────────────────────────────────────
 // Datos del Panel de Precios (Módulo 3).
@@ -126,14 +139,18 @@ export type ItemPreciosHistorico = ItemPrecios & { fechaCargaERP: Date | null };
  * Paginado server-side, ordenado por fecha de carga (lo más reciente primero).
  */
 export async function getHistoricoPrecios(
-  opts: { page?: number; q?: string } = {},
+  opts: { page?: number; q?: string; sort?: string; dir?: string; desde?: string; hasta?: string } = {},
 ): Promise<{ items: ItemPreciosHistorico[]; total: number; page: number; pages: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const q = opts.q?.trim();
+  const fecha = rangoFecha(opts.desde, opts.hasta);
+  const dir = normalizarDir(opts.dir);
+  const orderBy = (ORDEN_PRECIOS[opts.sort ?? ""] ?? ORDEN_PRECIOS.cargado)(dir);
   const where: Prisma.ItemSolicitudWhereInput = {
     estadoDecision: "APROBADO" as const,
     cargadoERP: true,
     motivo: { not: "PROBADOR" as const },
+    ...(fecha ? { fechaCargaERP: fecha } : {}),
     // Búsqueda de texto: EAN, producto, laboratorio (proveedor), código o farmacia.
     ...(q
       ? {
@@ -163,7 +180,7 @@ export async function getHistoricoPrecios(
         articulo: { select: { descripcion: true } },
         solicitud: { select: { codigo: true, nombreFarmaciaHistorico: true } },
       },
-      orderBy: [{ fechaCargaERP: "desc" }],
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),

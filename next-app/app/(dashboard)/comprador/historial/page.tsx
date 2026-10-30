@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import { getHistoricoComprador } from "@/lib/data/comprador";
+import { SortableTh } from "@/components/historial/SortableTh";
 import { ESTADO_DECISION_LABEL } from "@/types";
 import type { EstadoDecision } from "@/types";
 
@@ -17,16 +18,34 @@ const fmt = (d: Date | null) =>
 type EstadoHist = "APROBADO" | "RECHAZADO";
 const ESTADOS: EstadoHist[] = ["APROBADO", "RECHAZADO"];
 
+type Dir = "asc" | "desc";
+const SORT_DEFECTO = "fecha";
+
 const ESTADO_CLS: Record<string, string> = {
   APROBADO: "bg-green-100 text-green-700",
   RECHAZADO: "bg-red-100 text-red-700",
 };
 
-function qs(params: { estado?: EstadoHist | null; q?: string | null; page?: number }): string {
+type QsParams = {
+  estado?: EstadoHist | null;
+  q?: string | null;
+  desde?: string | null;
+  hasta?: string | null;
+  sort?: string | null;
+  dir?: Dir | null;
+  page?: number;
+};
+
+/** Arma el querystring preservando filtros, búsqueda y orden (omite los valores por defecto). */
+function qs(p: QsParams): string {
   const sp = new URLSearchParams();
-  if (params.estado) sp.set("estado", params.estado);
-  if (params.q) sp.set("q", params.q);
-  if (params.page && params.page > 1) sp.set("page", String(params.page));
+  if (p.estado) sp.set("estado", p.estado);
+  if (p.q) sp.set("q", p.q);
+  if (p.desde) sp.set("desde", p.desde);
+  if (p.hasta) sp.set("hasta", p.hasta);
+  if (p.sort && p.sort !== SORT_DEFECTO) sp.set("sort", p.sort);
+  if (p.dir && p.dir !== "desc") sp.set("dir", p.dir);
+  if (p.page && p.page > 1) sp.set("page", String(p.page));
   const s = sp.toString();
   return s ? `?${s}` : "?";
 }
@@ -34,7 +53,15 @@ function qs(params: { estado?: EstadoHist | null; q?: string | null; page?: numb
 export default async function HistorialCompradorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; estado?: string; q?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    estado?: string;
+    q?: string;
+    desde?: string;
+    hasta?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
@@ -42,10 +69,26 @@ export default async function HistorialCompradorPage({
     ? (sp.estado as EstadoHist)
     : null;
   const q = (sp.q ?? "").trim();
+  const desde = (sp.desde ?? "").trim();
+  const hasta = (sp.hasta ?? "").trim();
+  const sort = sp.sort ?? SORT_DEFECTO;
+  const dir: Dir = sp.dir === "asc" ? "asc" : "desc";
 
   const session = await auth();
   const compradorId = (session?.user as { id?: string } | undefined)?.id ?? "";
-  const data = await getHistoricoComprador(compradorId, { page, estado, q: q || undefined });
+  const data = await getHistoricoComprador(compradorId, {
+    page,
+    estado,
+    q: q || undefined,
+    desde: desde || undefined,
+    hasta: hasta || undefined,
+    sort,
+    dir,
+  });
+
+  // Base común para los links de orden: conserva filtros, búsqueda y rango de fechas.
+  const hrefFor = (col: string, d: Dir) => qs({ estado, q, desde, hasta, sort: col, dir: d });
+  const hayFiltro = Boolean(q || desde || hasta);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -55,22 +98,31 @@ export default async function HistorialCompradorPage({
       </p>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <FiltroChip href={qs({ estado: null, q })} activo={estado === null}>
+        <FiltroChip href={qs({ estado: null, q, desde, hasta, sort, dir })} activo={estado === null}>
           Todos
         </FiltroChip>
         {ESTADOS.map((e) => (
-          <FiltroChip key={e} href={qs({ estado: e, q })} activo={estado === e}>
+          <FiltroChip key={e} href={qs({ estado: e, q, desde, hasta, sort, dir })} activo={estado === e}>
             {ESTADO_DECISION_LABEL[e]}
           </FiltroChip>
         ))}
         <span className="ml-auto text-sm text-slate-500">{data.total} ítem(s)</span>
       </div>
 
-      <Buscador q={q} estado={estado} placeholder="Buscar por farmacia, producto, EAN o código…" />
+      <Buscador
+        q={q}
+        desde={desde}
+        hasta={hasta}
+        estado={estado}
+        sort={sort}
+        dir={dir}
+        hayFiltro={hayFiltro}
+        placeholder="Buscar por farmacia, producto, EAN o código…"
+      />
 
       {data.items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-lg text-slate-500">
-          {q || estado
+          {hayFiltro || estado
             ? "No hay ítems que coincidan con el filtro o la búsqueda."
             : "Todavía no resolviste ítems."}
         </div>
@@ -80,13 +132,13 @@ export default async function HistorialCompradorPage({
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
-                  <th className="px-4 py-3">Fecha</th>
-                  <th className="px-4 py-3">Solicitud</th>
-                  <th className="px-4 py-3">Farmacia</th>
-                  <th className="px-4 py-3">EAN</th>
-                  <th className="px-4 py-3">Producto</th>
-                  <th className="px-4 py-3 text-center">Cant.</th>
-                  <th className="px-4 py-3 text-center">Resultado</th>
+                  <SortableTh className="px-4 py-3" label="Fecha" col="fecha" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3" label="Solicitud" col="solicitud" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3" label="Farmacia" col="farmacia" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3" label="EAN" col="ean" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3" label="Producto" col="producto" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3 text-center" label="Cant." col="cantidad" activeSort={sort} dir={dir} hrefFor={hrefFor} />
+                  <SortableTh className="px-4 py-3 text-center" label="Resultado" col="resultado" activeSort={sort} dir={dir} hrefFor={hrefFor} />
                   <th className="px-4 py-3">Detalle</th>
                 </tr>
               </thead>
@@ -124,7 +176,7 @@ export default async function HistorialCompradorPage({
           {data.pages > 1 && (
             <div className="mt-4 flex items-center gap-2 text-base">
               <a
-                href={qs({ estado, q, page: data.page - 1 })}
+                href={qs({ estado, q, desde, hasta, sort, dir, page: data.page - 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page <= 1
                     ? "pointer-events-none border-slate-200 text-slate-300"
@@ -137,7 +189,7 @@ export default async function HistorialCompradorPage({
                 Página {data.page} de {data.pages}
               </span>
               <a
-                href={qs({ estado, q, page: data.page + 1 })}
+                href={qs({ estado, q, desde, hasta, sort, dir, page: data.page + 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page >= data.pages
                     ? "pointer-events-none border-slate-200 text-slate-300"
@@ -156,16 +208,29 @@ export default async function HistorialCompradorPage({
 
 function Buscador({
   q,
+  desde,
+  hasta,
   estado,
+  sort,
+  dir,
+  hayFiltro,
   placeholder,
 }: {
   q: string;
+  desde: string;
+  hasta: string;
   estado: string | null;
+  sort: string;
+  dir: Dir;
+  hayFiltro: boolean;
   placeholder: string;
 }) {
   return (
-    <form method="get" className="mb-4 flex flex-wrap items-center gap-2">
+    <form method="get" className="mb-4 flex flex-wrap items-end gap-2">
+      {/* El orden y el filtro de estado se conservan al buscar. */}
       {estado && <input type="hidden" name="estado" value={estado} />}
+      {sort !== SORT_DEFECTO && <input type="hidden" name="sort" value={sort} />}
+      {dir !== "desc" && <input type="hidden" name="dir" value={dir} />}
       <input
         type="search"
         name="q"
@@ -174,15 +239,35 @@ function Buscador({
         aria-label="Buscar"
         className="h-10 w-full max-w-md rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
       />
+      <label className="flex flex-col text-xs text-slate-500">
+        Desde
+        <input
+          type="date"
+          name="desde"
+          defaultValue={desde}
+          aria-label="Desde"
+          className="h-10 rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+        />
+      </label>
+      <label className="flex flex-col text-xs text-slate-500">
+        Hasta
+        <input
+          type="date"
+          name="hasta"
+          defaultValue={hasta}
+          aria-label="Hasta"
+          className="h-10 rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+        />
+      </label>
       <button
         type="submit"
         className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
       >
         Buscar
       </button>
-      {q && (
+      {hayFiltro && (
         <a
-          href={estado ? `?estado=${estado}` : "?"}
+          href={qs({ estado: estado as EstadoHist | null, sort, dir })}
           className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-600 hover:bg-slate-50"
         >
           Limpiar

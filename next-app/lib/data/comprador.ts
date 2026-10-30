@@ -1,6 +1,18 @@
 import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { normalizarDir, rangoFecha } from "./historial";
+
+// Columnas ordenables del historial del comprador (clic en la cabecera).
+const ORDEN_COMPRADOR: Record<string, (dir: "asc" | "desc") => Prisma.ItemSolicitudOrderByWithRelationInput> = {
+  fecha: (dir) => ({ fechaAprobacion: dir }),
+  solicitud: (dir) => ({ solicitud: { codigo: dir } }),
+  farmacia: (dir) => ({ solicitud: { nombreFarmaciaHistorico: dir } }),
+  ean: (dir) => ({ codigoBarra: dir }),
+  producto: (dir) => ({ articulo: { descripcion: dir } }),
+  cantidad: (dir) => ({ cantidad: dir }),
+  resultado: (dir) => ({ estadoDecision: dir }),
+};
 
 // ─────────────────────────────────────────────────────────────
 // Datos del Workspace del Comprador (Módulo 2).
@@ -76,13 +88,25 @@ export const PAGE_SIZE = 50;
 
 export async function getHistoricoComprador(
   compradorId: string,
-  opts: { page?: number; estado?: "APROBADO" | "RECHAZADO" | null; q?: string } = {},
+  opts: {
+    page?: number;
+    estado?: "APROBADO" | "RECHAZADO" | null;
+    q?: string;
+    sort?: string;
+    dir?: string;
+    desde?: string;
+    hasta?: string;
+  } = {},
 ): Promise<{ items: HistoricoItem[]; total: number; page: number; pages: number }> {
   const page = Math.max(1, opts.page ?? 1);
   const q = opts.q?.trim();
+  const fecha = rangoFecha(opts.desde, opts.hasta);
+  const dir = normalizarDir(opts.dir);
+  const orderBy = (ORDEN_COMPRADOR[opts.sort ?? ""] ?? ORDEN_COMPRADOR.fecha)(dir);
   const where: Prisma.ItemSolicitudWhereInput = {
     compradorId,
     estadoDecision: opts.estado ? opts.estado : { in: ["APROBADO", "RECHAZADO"] },
+    ...(fecha ? { fechaAprobacion: fecha } : {}),
     // Búsqueda de texto: matchea EAN, producto, código de solicitud o farmacia.
     ...(q
       ? {
@@ -110,7 +134,7 @@ export async function getHistoricoComprador(
         articulo: { select: { descripcion: true } },
         solicitud: { select: { codigo: true, nombreFarmaciaHistorico: true } },
       },
-      orderBy: { fechaAprobacion: "desc" },
+      orderBy,
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),

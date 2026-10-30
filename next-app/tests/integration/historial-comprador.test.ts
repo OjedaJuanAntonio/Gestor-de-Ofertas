@@ -104,4 +104,29 @@ describe("getHistoricoComprador (filtro por estado)", () => {
     const r = await getHistoricoComprador(compradorId, { q: "NO-EXISTE-XYZ-123" });
     expect(r.items.length).toBe(0);
   });
+
+  it("ordena por cantidad ascendente (cabecera de columna)", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo, sort: "cantidad", dir: "asc" });
+    expect(r.items.map((i) => i.cantidad)).toEqual([2, 4]);
+  });
+
+  it("ordena por cantidad descendente (cabecera de columna)", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo, sort: "cantidad", dir: "desc" });
+    expect(r.items.map((i) => i.cantidad)).toEqual([4, 2]);
+  });
+
+  it("un sort desconocido cae en el orden por defecto (no rompe)", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo, sort: "columna-invalida" });
+    expect(r.items.length).toBe(2);
+  });
+
+  it("filtra por rango de fechas: incluye hoy", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo, desde: "2020-01-01" });
+    expect(r.items.length).toBe(2);
+  });
+
+  it("filtra por rango de fechas: excluye con hasta en el pasado", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo, hasta: "2020-01-01" });
+    expect(r.items.length).toBe(0);
+  });
 });
