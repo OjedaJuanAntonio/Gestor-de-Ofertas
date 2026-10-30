@@ -84,6 +84,11 @@ describe("validateRow", () => {
     expect(validateRow({ ...base, cantidad: 1.5 }).ok).toBe(false);
     expect(validateRow({ ...base, cantidad: "" }).ok).toBe(false);
   });
+  it("cantidad con tope: rechaza un número disparatado (anti-overflow)", () => {
+    expect(validateRow({ ...base, cantidad: 1_000_001 }).ok).toBe(false);
+    expect(validateRow({ ...base, cantidad: 2_147_483_648 }).error).toMatch(/no puede superar/i);
+    expect(validateRow({ ...base, cantidad: 1_000_000 }).ok).toBe(true);
+  });
   it("motivo faltante", () => {
     expect(validateRow({ ...base, motivo: "" }).error).toMatch(/motivo/i);
   });

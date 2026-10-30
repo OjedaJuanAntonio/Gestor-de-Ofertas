@@ -443,6 +443,7 @@ export function GrillaCarga({
                       aria-label={`Cantidad, fila ${idx + 1}`}
                       type="number"
                       min={1}
+                      max={1000000}
                       value={fila.cantidad}
                       onChange={(e) =>
                         actualizarFila(fila.id, {

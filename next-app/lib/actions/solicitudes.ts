@@ -58,7 +58,9 @@ export async function enviarSolicitud(
 ): Promise<EnviarSolicitudResult> {
   // 1) Autorización
   const session = await auth();
-  const user = session?.user as { id: string; role?: string } | undefined;
+  const user = session?.user as
+    | { id: string; role?: string; farmaciaId?: number | null }
+    | undefined;
   if (!user || (user.role !== "FARMACIA" && user.role !== "ADMIN")) {
     return { ok: false, error: "No autorizado." };
   }
@@ -69,6 +71,12 @@ export async function enviarSolicitud(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Datos inválidos." };
   }
   const data = parsed.data;
+
+  // Una farmacia solo puede cargar para SU propia farmacia (el admin, para
+  // cualquiera). Evita que un operador atribuya una solicitud a otra farmacia.
+  if (user.role === "FARMACIA" && user.farmaciaId !== data.farmaciaId) {
+    return { ok: false, error: "No podés cargar solicitudes para otra farmacia." };
+  }
 
   // 3) Idempotencia: ¿ya se procesó este lote?
   const existente = await prisma.solicitud.findUnique({
