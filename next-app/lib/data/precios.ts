@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 // ─────────────────────────────────────────────────────────────
@@ -125,12 +126,26 @@ export type ItemPreciosHistorico = ItemPrecios & { fechaCargaERP: Date | null };
  * Paginado server-side, ordenado por fecha de carga (lo más reciente primero).
  */
 export async function getHistoricoPrecios(
-  page = 1,
+  opts: { page?: number; q?: string } = {},
 ): Promise<{ items: ItemPreciosHistorico[]; total: number; page: number; pages: number }> {
-  const where = {
+  const page = Math.max(1, opts.page ?? 1);
+  const q = opts.q?.trim();
+  const where: Prisma.ItemSolicitudWhereInput = {
     estadoDecision: "APROBADO" as const,
     cargadoERP: true,
     motivo: { not: "PROBADOR" as const },
+    // Búsqueda de texto: EAN, producto, laboratorio (proveedor), código o farmacia.
+    ...(q
+      ? {
+          OR: [
+            { codigoBarra: { contains: q, mode: "insensitive" } },
+            { articulo: { descripcion: { contains: q, mode: "insensitive" } } },
+            { laboratorioHistorico: { contains: q, mode: "insensitive" } },
+            { solicitud: { codigo: { contains: q, mode: "insensitive" } } },
+            { solicitud: { nombreFarmaciaHistorico: { contains: q, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
   };
 
   const [total, rows] = await Promise.all([
