@@ -156,89 +156,106 @@ export async function enviarSolicitud(
     };
   }
 
-  // 6) Código legible
-  const codigo = generateSolicitudCodigo();
-
-  // 7) Distribución multicomprador
+  // 6) Distribución multicomprador
   // itemsResueltos ya tiene compradorId y compradorMail → se agrupa directo.
   const { grupos, sinComprador } = agruparPorComprador(itemsResueltos);
 
-  // 8) Transacción atómica
-  try {
-    await prisma.$transaction(async (tx) => {
-      const solicitud = await tx.solicitud.create({
-        data: {
-          codigo,
-          idempotencyKey: data.idempotencyKey,
-          farmaciaId: farmacia.id,
-          nombreFarmaciaHistorico: farmacia.nombre,
-          emailFarmaciaHistorico: emailFarmacia,
-          creadoPorId: user.id,
-          items: {
-            create: itemsResueltos.map((it) => ({
-              codigoBarra: it.codigoBarra,
-              cantidad: it.cantidad,
-              motivo: it.motivo,
-              fechaVencimiento: it.fechaVencimiento,
-              observaciones: it.observaciones,
-              compradorId: it.compradorId,
-              compradorMailHistorico: it.compradorMail ?? "SIN_COMPRADOR",
-              laboratorioHistorico: it.laboratorio,
-            })),
-          },
-        },
-        select: { id: true },
-      });
+  // 7) Transacción atómica.
+  // El código legible es @unique y lleva timestamp al segundo + sufijo aleatorio:
+  // bajo mucho uso simultáneo, dos cargas en el mismo segundo podrían chocar en
+  // ese código. Si pasa, reintentamos con un código nuevo de forma transparente.
+  // Una colisión de idempotencyKey (el MISMO lote reenviado) NO se reintenta:
+  // es un duplicado legítimo y devolvemos la solicitud existente.
+  const MAX_INTENTOS_CODIGO = 5;
+  let codigo = "";
 
-      // Nota: NO se notifica por mail a los compradores (decisión de negocio,
-      // igual que en el flujo de producción: evita saturarlos). Ven sus ítems
-      // nuevos directamente en la bandeja. Solo se encolan correos a la farmacia
-      // en el cierre (consolidado / rechazo total).
-
-      await tx.auditLog.create({
-        data: {
-          entityType: "Solicitud",
-          entityId: solicitud.id,
-          action: "CREAR",
-          actorId: user.id,
-          actorEmail: session?.user?.email ?? null,
-          diff: {
+  for (let intento = 0; intento < MAX_INTENTOS_CODIGO; intento++) {
+    codigo = generateSolicitudCodigo();
+    try {
+      await prisma.$transaction(async (tx) => {
+        const solicitud = await tx.solicitud.create({
+          data: {
             codigo,
-            items: itemsResueltos.length,
-            compradores: grupos.length,
-            sinComprador: sinComprador.length,
-          } as Prisma.InputJsonValue,
-        },
+            idempotencyKey: data.idempotencyKey,
+            farmaciaId: farmacia.id,
+            nombreFarmaciaHistorico: farmacia.nombre,
+            emailFarmaciaHistorico: emailFarmacia,
+            creadoPorId: user.id,
+            items: {
+              create: itemsResueltos.map((it) => ({
+                codigoBarra: it.codigoBarra,
+                cantidad: it.cantidad,
+                motivo: it.motivo,
+                fechaVencimiento: it.fechaVencimiento,
+                observaciones: it.observaciones,
+                compradorId: it.compradorId,
+                compradorMailHistorico: it.compradorMail ?? "SIN_COMPRADOR",
+                laboratorioHistorico: it.laboratorio,
+              })),
+            },
+          },
+          select: { id: true },
+        });
+
+        // Nota: NO se notifica por mail a los compradores (decisión de negocio,
+        // igual que en el flujo de producción: evita saturarlos). Ven sus ítems
+        // nuevos directamente en la bandeja. Solo se encolan correos a la farmacia
+        // en el cierre (consolidado / rechazo total).
+
+        await tx.auditLog.create({
+          data: {
+            entityType: "Solicitud",
+            entityId: solicitud.id,
+            action: "CREAR",
+            actorId: user.id,
+            actorEmail: session?.user?.email ?? null,
+            diff: {
+              codigo,
+              items: itemsResueltos.length,
+              compradores: grupos.length,
+              sinComprador: sinComprador.length,
+            } as Prisma.InputJsonValue,
+          },
+        });
       });
-    });
-  } catch (e) {
-    // Carrera con la unicidad de idempotencyKey → tratamos como duplicado OK.
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
-      const dup = await prisma.solicitud.findUnique({
-        where: { idempotencyKey: data.idempotencyKey },
-        select: { codigo: true, _count: { select: { items: true } } },
-      });
-      if (dup) {
-        return {
-          ok: true,
-          codigo: dup.codigo,
-          totalItems: dup._count.items,
-          compradoresConItems: 0,
-          itemsSinComprador: 0,
-          duplicada: true,
-        };
+
+      // Éxito.
+      return {
+        ok: true,
+        codigo,
+        totalItems: itemsResueltos.length,
+        compradoresConItems: grupos.length,
+        itemsSinComprador: sinComprador.length,
+        duplicada: false,
+      };
+    } catch (e) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        // ¿Chocó la idempotencyKey? (mismo lote reenviado) → duplicado OK.
+        const dup = await prisma.solicitud.findUnique({
+          where: { idempotencyKey: data.idempotencyKey },
+          select: { codigo: true, _count: { select: { items: true } } },
+        });
+        if (dup) {
+          return {
+            ok: true,
+            codigo: dup.codigo,
+            totalItems: dup._count.items,
+            compradoresConItems: 0,
+            itemsSinComprador: 0,
+            duplicada: true,
+          };
+        }
+        // No existe una solicitud con nuestra idempotencyKey → la única otra
+        // restricción única es el código legible: fue una colisión de código.
+        // Reintentamos con uno nuevo en la próxima vuelta del for.
+        continue;
       }
+      console.error("[enviarSolicitud] error:", e);
+      return { ok: false, error: "No se pudo guardar la solicitud. Reintentá." };
     }
-    console.error("[enviarSolicitud] error:", e);
-    return { ok: false, error: "No se pudo guardar la solicitud. Reintentá." };
   }
 
-  return {
-    ok: true,
-    codigo,
-    totalItems: itemsResueltos.length,
-    compradoresConItems: grupos.length,
-    itemsSinComprador: sinComprador.length,
-    duplicada: false,
-  };
+  // Agotó los reintentos de código (extremadamente improbable).
+  console.error("[enviarSolicitud] no se pudo generar un código único tras varios intentos");
+  return { ok: false, error: "No se pudo guardar la solicitud. Reintentá." };
 }
