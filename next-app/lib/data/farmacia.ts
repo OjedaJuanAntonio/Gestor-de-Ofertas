@@ -2,6 +2,14 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { EstadoSolicitud } from "@/types";
+import { normalizarDir, rangoFecha } from "./historial";
+
+// Columnas ordenables de "Mis solicitudes" (clic en la cabecera).
+const ORDEN_FARMACIA: Record<string, (dir: "asc" | "desc") => Prisma.SolicitudOrderByWithRelationInput> = {
+  codigo: (dir) => ({ codigo: dir }),
+  enviada: (dir) => ({ fechaEnvio: dir }),
+  items: (dir) => ({ items: { _count: dir } }),
+};
 
 export type SolicitudResumen = {
   id: string;
@@ -31,13 +39,25 @@ export type SolicitudesFarmaciaResult = {
  */
 export async function getSolicitudesFarmacia(
   farmaciaId: number | null,
-  opts: { page?: number; estado?: EstadoSolicitud | null; q?: string } = {},
+  opts: {
+    page?: number;
+    estado?: EstadoSolicitud | null;
+    q?: string;
+    sort?: string;
+    dir?: string;
+    desde?: string;
+    hasta?: string;
+  } = {},
 ): Promise<SolicitudesFarmaciaResult> {
   const page = Math.max(1, opts.page ?? 1);
   const q = opts.q?.trim();
+  const fecha = rangoFecha(opts.desde, opts.hasta);
+  const dir = normalizarDir(opts.dir);
+  const orderBy = (ORDEN_FARMACIA[opts.sort ?? ""] ?? ORDEN_FARMACIA.enviada)(dir);
   const where: Prisma.SolicitudWhereInput = {
     ...(farmaciaId ? { farmaciaId } : {}),
     ...(opts.estado ? { estado: opts.estado } : {}),
+    ...(fecha ? { fechaEnvio: fecha } : {}),
     // Búsqueda de texto: código de la solicitud, o EAN/producto de sus ítems.
     ...(q
       ? {
@@ -54,7 +74,7 @@ export async function getSolicitudesFarmacia(
     prisma.solicitud.count({ where }),
     prisma.solicitud.findMany({
       where,
-      orderBy: { fechaEnvio: "desc" },
+      orderBy,
       skip: (page - 1) * PAGE_SIZE_SOLICITUDES,
       take: PAGE_SIZE_SOLICITUDES,
       select: {

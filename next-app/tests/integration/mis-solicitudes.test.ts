@@ -86,4 +86,25 @@ describe("getSolicitudesFarmacia (paginación + filtro)", () => {
     const r = await getSolicitudesFarmacia(farmaciaId, { q: "NO-EXISTE-XYZ-123" });
     expect(r.total).toBe(0);
   });
+
+  it("ordena por código: asc es el reverso de desc (cabecera de columna)", async () => {
+    const asc = await getSolicitudesFarmacia(farmaciaId, { sort: "codigo", dir: "asc" });
+    const desc = await getSolicitudesFarmacia(farmaciaId, { sort: "codigo", dir: "desc" });
+    const ascCods = asc.items.map((s) => s.codigo);
+    const descCods = desc.items.map((s) => s.codigo);
+    expect(ascCods).toHaveLength(3);
+    expect(ascCods).toEqual([...descCods].reverse());
+  });
+
+  it("un sort desconocido cae en el orden por defecto (no rompe)", async () => {
+    const r = await getSolicitudesFarmacia(farmaciaId, { sort: "columna-invalida" });
+    expect(r.total).toBe(3);
+  });
+
+  it("filtra por rango de fechas: incluye hoy / excluye pasado", async () => {
+    const dentro = await getSolicitudesFarmacia(farmaciaId, { desde: "2020-01-01" });
+    expect(dentro.total).toBe(3);
+    const fuera = await getSolicitudesFarmacia(farmaciaId, { hasta: "2020-01-01" });
+    expect(fuera.total).toBe(0);
+  });
 });
