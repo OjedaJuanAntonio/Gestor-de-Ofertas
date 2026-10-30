@@ -48,6 +48,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
   PRECIOS: [
     { label: "Carga ERP", href: "/precios/dashboard", icon: CheckSquare },
+    { label: "Historial", href: "/precios/historial", icon: History },
   ],
 };
 

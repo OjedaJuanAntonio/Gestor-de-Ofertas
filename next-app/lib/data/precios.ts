@@ -117,3 +117,58 @@ export async function filtrarPendientesValidos(ids: string[]): Promise<string[]>
   });
   return rows.map((r) => r.id);
 }
+
+export type ItemPreciosHistorico = ItemPrecios & { fechaCargaERP: Date | null };
+
+/**
+ * Historial de Precios: ítems que YA se cargaron en el ERP (cargadoERP = true).
+ * Paginado server-side, ordenado por fecha de carga (lo más reciente primero).
+ */
+export async function getHistoricoPrecios(
+  page = 1,
+): Promise<{ items: ItemPreciosHistorico[]; total: number; page: number; pages: number }> {
+  const where = {
+    estadoDecision: "APROBADO" as const,
+    cargadoERP: true,
+    motivo: { not: "PROBADOR" as const },
+  };
+
+  const [total, rows] = await Promise.all([
+    prisma.itemSolicitud.count({ where }),
+    prisma.itemSolicitud.findMany({
+      where,
+      select: {
+        id: true,
+        codigoBarra: true,
+        cantidad: true,
+        condicionAutorizada: true,
+        fechaAprobacion: true,
+        fechaCargaERP: true,
+        laboratorioHistorico: true,
+        articulo: { select: { descripcion: true } },
+        solicitud: { select: { codigo: true, nombreFarmaciaHistorico: true } },
+      },
+      orderBy: [{ fechaCargaERP: "desc" }],
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+    }),
+  ]);
+
+  return {
+    total,
+    page,
+    pages: Math.max(1, Math.ceil(total / PAGE_SIZE)),
+    items: rows.map((it) => ({
+      id: it.id,
+      codigoBarra: it.codigoBarra,
+      descripcion: it.articulo.descripcion,
+      laboratorio: it.laboratorioHistorico,
+      cantidad: it.cantidad,
+      condicionAutorizada: it.condicionAutorizada,
+      solicitudCodigo: it.solicitud.codigo,
+      farmaciaNombre: it.solicitud.nombreFarmaciaHistorico,
+      fechaAprobacion: it.fechaAprobacion,
+      fechaCargaERP: it.fechaCargaERP,
+    })),
+  };
+}
