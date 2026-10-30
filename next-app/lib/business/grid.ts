@@ -26,6 +26,10 @@ export function isValidVencimiento(mmYY: string): boolean {
   return mes >= 1 && mes <= 12;
 }
 
+/** Tope de cantidad por ítem. Más que suficiente para cualquier oferta real
+ *  y evita que un número disparatado desborde el Int de la base. */
+export const MAX_CANTIDAD = 1_000_000;
+
 export function validateRow(row: GridRowInput): RowValidation {
   const ean = normalizeEan(row.codigoBarra);
 
@@ -37,6 +41,8 @@ export function validateRow(row: GridRowInput): RowValidation {
 
   if (row.cantidad === "" || !Number.isInteger(row.cantidad) || row.cantidad <= 0)
     return { ok: false, error: "La cantidad debe ser un entero mayor a cero" };
+  if (row.cantidad > MAX_CANTIDAD)
+    return { ok: false, error: `La cantidad no puede superar ${MAX_CANTIDAD.toLocaleString("es-AR")}` };
 
   if (!row.motivo) return { ok: false, error: "Elegí un motivo" };
 
