@@ -93,4 +93,15 @@ describe("getHistoricoComprador (filtro por estado)", () => {
     const mio = r.items.find((i) => i.solicitudCodigo === codigo);
     expect(mio?.motivoRechazo).toBe("Sin interés comercial");
   });
+
+  it("busca por código de solicitud (casilla de búsqueda)", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: codigo });
+    expect(r.items.length).toBe(2);
+    expect(r.items.every((i) => i.solicitudCodigo === codigo)).toBe(true);
+  });
+
+  it("búsqueda sin coincidencias devuelve vacío", async () => {
+    const r = await getHistoricoComprador(compradorId, { q: "NO-EXISTE-XYZ-123" });
+    expect(r.items.length).toBe(0);
+  });
 });

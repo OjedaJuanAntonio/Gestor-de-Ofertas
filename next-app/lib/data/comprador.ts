@@ -76,12 +76,24 @@ export const PAGE_SIZE = 50;
 
 export async function getHistoricoComprador(
   compradorId: string,
-  opts: { page?: number; estado?: "APROBADO" | "RECHAZADO" | null } = {},
+  opts: { page?: number; estado?: "APROBADO" | "RECHAZADO" | null; q?: string } = {},
 ): Promise<{ items: HistoricoItem[]; total: number; page: number; pages: number }> {
   const page = Math.max(1, opts.page ?? 1);
+  const q = opts.q?.trim();
   const where: Prisma.ItemSolicitudWhereInput = {
     compradorId,
     estadoDecision: opts.estado ? opts.estado : { in: ["APROBADO", "RECHAZADO"] },
+    // Búsqueda de texto: matchea EAN, producto, código de solicitud o farmacia.
+    ...(q
+      ? {
+          OR: [
+            { codigoBarra: { contains: q, mode: "insensitive" } },
+            { articulo: { descripcion: { contains: q, mode: "insensitive" } } },
+            { solicitud: { codigo: { contains: q, mode: "insensitive" } } },
+            { solicitud: { nombreFarmaciaHistorico: { contains: q, mode: "insensitive" } } },
+          ],
+        }
+      : {}),
   };
   const [total, rows] = await Promise.all([
     prisma.itemSolicitud.count({ where }),

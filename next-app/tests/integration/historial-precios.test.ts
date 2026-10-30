@@ -66,7 +66,7 @@ afterAll(async () => {
 
 describe("getHistoricoPrecios", () => {
   it("incluye los ítems cargados y excluye los pendientes", async () => {
-    const r = await getHistoricoPrecios(1);
+    const r = await getHistoricoPrecios({ page: 1 });
     const mios = r.items.filter((i) => i.solicitudCodigo === codigo);
     // Solo el cargadoERP=true aparece.
     expect(mios).toHaveLength(1);
@@ -76,9 +76,20 @@ describe("getHistoricoPrecios", () => {
   });
 
   it("devuelve shape paginado", async () => {
-    const r = await getHistoricoPrecios(1);
+    const r = await getHistoricoPrecios({ page: 1 });
     expect(r.page).toBe(1);
     expect(r.pages).toBeGreaterThanOrEqual(1);
     expect(r.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it("busca por código de solicitud (casilla de búsqueda)", async () => {
+    const r = await getHistoricoPrecios({ q: codigo });
+    expect(r.items.length).toBe(1);
+    expect(r.items[0].solicitudCodigo).toBe(codigo);
+  });
+
+  it("búsqueda sin coincidencias devuelve vacío", async () => {
+    const r = await getHistoricoPrecios({ q: "NO-EXISTE-XYZ-123" });
+    expect(r.items.length).toBe(0);
   });
 });

@@ -75,4 +75,15 @@ describe("getSolicitudesFarmacia (paginación + filtro)", () => {
     expect(r.items).toHaveLength(0); // page 99 está más allá del final
     expect(r.page).toBe(99);
   });
+
+  it("busca por código de solicitud (casilla de búsqueda)", async () => {
+    const r = await getSolicitudesFarmacia(farmaciaId, { q: codigos[0] });
+    expect(r.total).toBe(1);
+    expect(r.items[0].codigo).toBe(codigos[0]);
+  });
+
+  it("búsqueda sin coincidencias devuelve vacío", async () => {
+    const r = await getSolicitudesFarmacia(farmaciaId, { q: "NO-EXISTE-XYZ-123" });
+    expect(r.total).toBe(0);
+  });
 });

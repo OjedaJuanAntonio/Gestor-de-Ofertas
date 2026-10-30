@@ -23,10 +23,11 @@ const ESTADO_CLS: Record<string, string> = {
 
 const ESTADOS: EstadoSolicitud[] = ["PENDIENTE", "EN_PROCESO", "FINALIZADA"];
 
-/** Arma el querystring preservando el estado activo (y reseteando page si corresponde). */
-function qs(params: { estado?: EstadoSolicitud | null; page?: number }): string {
+/** Arma el querystring preservando estado y búsqueda (y reseteando page si corresponde). */
+function qs(params: { estado?: EstadoSolicitud | null; q?: string | null; page?: number }): string {
   const sp = new URLSearchParams();
   if (params.estado) sp.set("estado", params.estado);
+  if (params.q) sp.set("q", params.q);
   if (params.page && params.page > 1) sp.set("page", String(params.page));
   const s = sp.toString();
   return s ? `?${s}` : "?";
@@ -35,30 +36,31 @@ function qs(params: { estado?: EstadoSolicitud | null; page?: number }): string 
 export default async function MisSolicitudesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; estado?: string }>;
+  searchParams: Promise<{ page?: string; estado?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const estado = ESTADOS.includes(sp.estado as EstadoSolicitud)
     ? (sp.estado as EstadoSolicitud)
     : null;
+  const q = (sp.q ?? "").trim();
 
   const session = await auth();
   const user = session?.user as { role?: string; farmaciaId?: number | null } | undefined;
   const farmaciaId = user?.role === "FARMACIA" ? (user.farmaciaId ?? null) : null;
-  const data = await getSolicitudesFarmacia(farmaciaId, { page, estado });
+  const data = await getSolicitudesFarmacia(farmaciaId, { page, estado, q: q || undefined });
 
   return (
     <div className="mx-auto max-w-5xl">
       <h1 className="mb-5 text-2xl font-bold text-slate-800">Mis solicitudes</h1>
 
       {/* Filtro por estado */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <FiltroChip href={qs({ estado: null })} activo={estado === null}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <FiltroChip href={qs({ estado: null, q })} activo={estado === null}>
           Todas
         </FiltroChip>
         {ESTADOS.map((e) => (
-          <FiltroChip key={e} href={qs({ estado: e })} activo={estado === e}>
+          <FiltroChip key={e} href={qs({ estado: e, q })} activo={estado === e}>
             {ESTADO_SOLICITUD_LABEL[e]}
           </FiltroChip>
         ))}
@@ -67,10 +69,37 @@ export default async function MisSolicitudesPage({
         </span>
       </div>
 
+      {/* Búsqueda */}
+      <form method="get" className="mb-4 flex flex-wrap items-center gap-2">
+        {estado && <input type="hidden" name="estado" value={estado} />}
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Buscar por código, producto o EAN…"
+          aria-label="Buscar"
+          className="h-10 w-full max-w-md rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+        />
+        <button
+          type="submit"
+          className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+        >
+          Buscar
+        </button>
+        {q && (
+          <a
+            href={estado ? `?estado=${estado}` : "?"}
+            className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-600 hover:bg-slate-50"
+          >
+            Limpiar
+          </a>
+        )}
+      </form>
+
       {data.items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-lg text-slate-500">
-          {estado
-            ? "No hay solicitudes con ese estado."
+          {q || estado
+            ? "No hay solicitudes que coincidan con el filtro o la búsqueda."
             : "Todavía no enviaste solicitudes."}
         </div>
       ) : (
@@ -118,7 +147,7 @@ export default async function MisSolicitudesPage({
           {data.pages > 1 && (
             <div className="mt-4 flex items-center gap-2 text-base">
               <a
-                href={qs({ estado, page: data.page - 1 })}
+                href={qs({ estado, q, page: data.page - 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page <= 1
                     ? "pointer-events-none border-slate-200 text-slate-300"
@@ -131,7 +160,7 @@ export default async function MisSolicitudesPage({
                 Página {data.page} de {data.pages}
               </span>
               <a
-                href={qs({ estado, page: data.page + 1 })}
+                href={qs({ estado, q, page: data.page + 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page >= data.pages
                     ? "pointer-events-none border-slate-200 text-slate-300"

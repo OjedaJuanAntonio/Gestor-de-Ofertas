@@ -22,9 +22,10 @@ const ESTADO_CLS: Record<string, string> = {
   RECHAZADO: "bg-red-100 text-red-700",
 };
 
-function qs(params: { estado?: EstadoHist | null; page?: number }): string {
+function qs(params: { estado?: EstadoHist | null; q?: string | null; page?: number }): string {
   const sp = new URLSearchParams();
   if (params.estado) sp.set("estado", params.estado);
+  if (params.q) sp.set("q", params.q);
   if (params.page && params.page > 1) sp.set("page", String(params.page));
   const s = sp.toString();
   return s ? `?${s}` : "?";
@@ -33,17 +34,18 @@ function qs(params: { estado?: EstadoHist | null; page?: number }): string {
 export default async function HistorialCompradorPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; estado?: string }>;
+  searchParams: Promise<{ page?: string; estado?: string; q?: string }>;
 }) {
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const estado = ESTADOS.includes(sp.estado as EstadoHist)
     ? (sp.estado as EstadoHist)
     : null;
+  const q = (sp.q ?? "").trim();
 
   const session = await auth();
   const compradorId = (session?.user as { id?: string } | undefined)?.id ?? "";
-  const data = await getHistoricoComprador(compradorId, { page, estado });
+  const data = await getHistoricoComprador(compradorId, { page, estado, q: q || undefined });
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -52,21 +54,25 @@ export default async function HistorialCompradorPage({
         Ítems que ya resolviste: aprobados (con su condición) y rechazados (con su motivo).
       </p>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <FiltroChip href={qs({ estado: null })} activo={estado === null}>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <FiltroChip href={qs({ estado: null, q })} activo={estado === null}>
           Todos
         </FiltroChip>
         {ESTADOS.map((e) => (
-          <FiltroChip key={e} href={qs({ estado: e })} activo={estado === e}>
+          <FiltroChip key={e} href={qs({ estado: e, q })} activo={estado === e}>
             {ESTADO_DECISION_LABEL[e]}
           </FiltroChip>
         ))}
         <span className="ml-auto text-sm text-slate-500">{data.total} ítem(s)</span>
       </div>
 
+      <Buscador q={q} estado={estado} placeholder="Buscar por farmacia, producto, EAN o código…" />
+
       {data.items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center text-lg text-slate-500">
-          {estado ? "No hay ítems con ese resultado." : "Todavía no resolviste ítems."}
+          {q || estado
+            ? "No hay ítems que coincidan con el filtro o la búsqueda."
+            : "Todavía no resolviste ítems."}
         </div>
       ) : (
         <>
@@ -118,7 +124,7 @@ export default async function HistorialCompradorPage({
           {data.pages > 1 && (
             <div className="mt-4 flex items-center gap-2 text-base">
               <a
-                href={qs({ estado, page: data.page - 1 })}
+                href={qs({ estado, q, page: data.page - 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page <= 1
                     ? "pointer-events-none border-slate-200 text-slate-300"
@@ -131,7 +137,7 @@ export default async function HistorialCompradorPage({
                 Página {data.page} de {data.pages}
               </span>
               <a
-                href={qs({ estado, page: data.page + 1 })}
+                href={qs({ estado, q, page: data.page + 1 })}
                 className={`rounded-md border px-3 py-1.5 ${
                   data.page >= data.pages
                     ? "pointer-events-none border-slate-200 text-slate-300"
@@ -145,6 +151,44 @@ export default async function HistorialCompradorPage({
         </>
       )}
     </div>
+  );
+}
+
+function Buscador({
+  q,
+  estado,
+  placeholder,
+}: {
+  q: string;
+  estado: string | null;
+  placeholder: string;
+}) {
+  return (
+    <form method="get" className="mb-4 flex flex-wrap items-center gap-2">
+      {estado && <input type="hidden" name="estado" value={estado} />}
+      <input
+        type="search"
+        name="q"
+        defaultValue={q}
+        placeholder={placeholder}
+        aria-label="Buscar"
+        className="h-10 w-full max-w-md rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+      />
+      <button
+        type="submit"
+        className="h-10 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+      >
+        Buscar
+      </button>
+      {q && (
+        <a
+          href={estado ? `?estado=${estado}` : "?"}
+          className="inline-flex h-10 items-center rounded-lg border border-slate-300 px-4 text-sm font-medium text-slate-600 hover:bg-slate-50"
+        >
+          Limpiar
+        </a>
+      )}
+    </form>
   );
 }
 

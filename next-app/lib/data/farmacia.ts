@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { EstadoSolicitud } from "@/types";
 
@@ -30,12 +31,23 @@ export type SolicitudesFarmaciaResult = {
  */
 export async function getSolicitudesFarmacia(
   farmaciaId: number | null,
-  opts: { page?: number; estado?: EstadoSolicitud | null } = {},
+  opts: { page?: number; estado?: EstadoSolicitud | null; q?: string } = {},
 ): Promise<SolicitudesFarmaciaResult> {
   const page = Math.max(1, opts.page ?? 1);
-  const where = {
+  const q = opts.q?.trim();
+  const where: Prisma.SolicitudWhereInput = {
     ...(farmaciaId ? { farmaciaId } : {}),
     ...(opts.estado ? { estado: opts.estado } : {}),
+    // Búsqueda de texto: código de la solicitud, o EAN/producto de sus ítems.
+    ...(q
+      ? {
+          OR: [
+            { codigo: { contains: q, mode: "insensitive" } },
+            { items: { some: { codigoBarra: { contains: q, mode: "insensitive" } } } },
+            { items: { some: { articulo: { descripcion: { contains: q, mode: "insensitive" } } } } },
+          ],
+        }
+      : {}),
   };
 
   const [total, solicitudes] = await Promise.all([
