@@ -13,12 +13,21 @@ const ROLE_ROUTES: Record<string, string[]> = {
 };
 
 type AuthedRequest = NextRequest & {
-  auth: { user?: { role?: string } } | null;
+  auth: { user?: { role?: string; mustChangePassword?: boolean } } | null;
 };
+
+const CAMBIAR_CLAVE = "/cambiar-clave";
 
 export default auth(function middleware(req: AuthedRequest) {
   const { pathname } = req.nextUrl;
-  const userRole: string | undefined = req.auth?.user?.role;
+  const user = req.auth?.user;
+  const userRole: string | undefined = user?.role;
+
+  // Cambio de contraseña obligatorio: mientras el flag esté activo, todo
+  // (salvo la propia pantalla de cambio) redirige a /cambiar-clave.
+  if (user?.mustChangePassword && pathname !== CAMBIAR_CLAVE) {
+    return NextResponse.redirect(new URL(CAMBIAR_CLAVE, req.url));
+  }
 
   const matchedPrefix = Object.keys(ROLE_ROUTES).find((prefix) =>
     pathname.startsWith(prefix)

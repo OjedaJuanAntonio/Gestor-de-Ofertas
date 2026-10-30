@@ -51,6 +51,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
             role: true,
             activo: true,
             farmaciaId: true,
+            mustChangePassword: true,
           },
         });
 
@@ -72,6 +73,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           nombre: user.nombre,
           role: user.role,
           farmaciaId: user.farmaciaId,
+          mustChangePassword: user.mustChangePassword,
         };
       },
     }),
