@@ -39,11 +39,13 @@ export const authConfig: NextAuthConfig = {
           role?: string;
           nombre?: string;
           farmaciaId?: number | null;
+          mustChangePassword?: boolean;
         };
         token.id = u.id;
         token.role = u.role;
         token.nombre = u.nombre;
         token.farmaciaId = u.farmaciaId;
+        token.mustChangePassword = u.mustChangePassword ?? false;
       }
       return token;
     },
@@ -55,11 +57,13 @@ export const authConfig: NextAuthConfig = {
           role?: unknown;
           nombre?: unknown;
           farmaciaId?: unknown;
+          mustChangePassword?: unknown;
         };
         su.id = token.id as string;
         su.role = token.role;
         su.nombre = token.nombre;
         su.farmaciaId = token.farmaciaId;
+        su.mustChangePassword = token.mustChangePassword;
       }
       return session;
     },

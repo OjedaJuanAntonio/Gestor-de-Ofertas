@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { crearUsuario, toggleUsuario, resetearPassword } from "@/lib/actions/admin";
+import { crearUsuario, toggleUsuario, resetearPassword, resetearAClaveTemporal } from "@/lib/actions/admin";
+import { CLAVE_TEMPORAL } from "@/lib/password";
 import type { Role } from "@/types";
 import { Button } from "@/components/ui/button";
 
@@ -41,6 +42,20 @@ export function UsuariosAdmin({
   const [resetUser, setResetUser] = useState<{ id: string; nombre: string } | null>(null);
   const [nuevaPass, setNuevaPass] = useState("");
   const [resetError, setResetError] = useState<string | null>(null);
+  const [tempUser, setTempUser] = useState<{ id: string; nombre: string } | null>(null);
+  const [tempError, setTempError] = useState<string | null>(null);
+
+  function hacerResetTemporal() {
+    if (!tempUser) return;
+    setTempError(null);
+    start(async () => {
+      const res = await resetearAClaveTemporal(tempUser.id);
+      if (res.ok) {
+        setTempUser(null);
+        router.refresh();
+      } else setTempError(res.error);
+    });
+  }
 
   function hacerReset() {
     if (!resetUser) return;
@@ -145,6 +160,12 @@ export function UsuariosAdmin({
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <button
+                    onClick={() => { setTempUser({ id: u.id, nombre: u.nombre }); setTempError(null); }}
+                    className="mr-4 text-sm font-semibold text-slate-600 hover:underline"
+                  >
+                    Clave temporal
+                  </button>
+                  <button
                     onClick={() => { setResetUser({ id: u.id, nombre: u.nombre }); setNuevaPass(""); setResetError(null); }}
                     className="mr-4 text-sm font-semibold text-slate-600 hover:underline"
                   >
@@ -190,6 +211,35 @@ export function UsuariosAdmin({
                 disabled={pending || nuevaPass.length < 10}
               >
                 Guardar contraseña
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {tempUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setTempUser(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold text-slate-800">Resetear a clave temporal</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              A <strong>{tempUser.nombre}</strong> se le va a asignar la clave temporal{" "}
+              <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800">{CLAVE_TEMPORAL}</code>{" "}
+              y se le pedirá cambiarla al iniciar sesión. Comunicásela a la farmacia (es genérica,
+              no debe ser la personal).
+            </p>
+            {tempError && <p className="mt-2 text-sm font-semibold text-red-600">{tempError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setTempUser(null)}>
+                Cancelar
+              </Button>
+              <Button className="bg-blue-600 hover:bg-blue-700" onClick={hacerResetTemporal} disabled={pending}>
+                Asignar clave temporal
               </Button>
             </div>
           </div>

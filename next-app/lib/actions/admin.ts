@@ -8,7 +8,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseArticulosCsv } from "@/lib/import/articulos-csv";
 import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
+import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
+import { CLAVE_TEMPORAL } from "@/lib/password";
 
 // ─────────────────────────────────────────────────────────────
 // Server Actions del panel Admin (gestión de maestros).
@@ -161,6 +163,104 @@ export async function resetearPassword(
     return { ok: true, mensaje: "Contraseña actualizada." };
   } catch {
     return { ok: false, error: "No se pudo actualizar la contraseña." };
+  }
+}
+
+/**
+ * Resetea el usuario a la clave temporal y lo obliga a cambiarla en el próximo
+ * inicio de sesión. Es la herramienta para el "me olvidé la contraseña": el
+ * admin la dicta y el usuario elige una nueva al entrar.
+ */
+export async function resetearAClaveTemporal(id: string): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  try {
+    const hash = await bcrypt.hash(CLAVE_TEMPORAL, 10);
+    await prisma.user.update({
+      where: { id },
+      data: { password: hash, mustChangePassword: true },
+    });
+    revalidatePath("/admin/usuarios");
+    return { ok: true, mensaje: `Clave temporal: ${CLAVE_TEMPORAL} (se la pedirá cambiar al entrar).` };
+  } catch {
+    return { ok: false, error: "No se pudo resetear la contraseña." };
+  }
+}
+
+// ── Import masivo de usuarios de farmacia (CSV) ────────────
+export type ImportUsuariosResult =
+  | {
+      ok: true;
+      importados: number;
+      omitidos: number;
+      noEncontradas: string[];
+      errores: { linea: number; motivo: string }[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Alta masiva de logins de farmacia: un usuario (rol FARMACIA) por fila,
+ * matcheado con una farmacia EXISTENTE por nombre (case-insensitive). Todos
+ * quedan con la clave temporal y mustChangePassword=true. Los emails ya
+ * existentes se omiten (createMany skipDuplicates); las farmacias que no existen
+ * se informan aparte (hay que importarlas primero).
+ */
+export async function importarUsuariosFarmacia(csvText: string): Promise<ImportUsuariosResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+
+  const { validos, errores } = parseUsuariosCsv(csvText);
+  if (validos.length === 0) return { ok: false, error: "No hay filas válidas para importar." };
+
+  // Resolver farmacias por nombre (case-insensitive, robusto a diferencias de mayúsculas).
+  const todas = await prisma.farmacia.findMany({ select: { id: true, nombre: true } });
+  const porNombre = new Map(todas.map((f) => [f.nombre.trim().toLowerCase(), f.id]));
+
+  const noEncontradas: string[] = [];
+  const hash = await bcrypt.hash(CLAVE_TEMPORAL, 10);
+  const data: {
+    email: string;
+    nombre: string;
+    password: string;
+    role: "FARMACIA";
+    farmaciaId: number;
+    mustChangePassword: boolean;
+  }[] = [];
+
+  for (const v of validos) {
+    const farmaciaId = porNombre.get(v.farmacia.toLowerCase());
+    if (!farmaciaId) {
+      noEncontradas.push(v.farmacia);
+      continue;
+    }
+    data.push({
+      email: v.email,
+      nombre: v.nombre || v.farmacia,
+      password: hash,
+      role: "FARMACIA",
+      farmaciaId,
+      mustChangePassword: true,
+    });
+  }
+
+  if (data.length === 0)
+    return {
+      ok: false,
+      error: "Ninguna farmacia del archivo existe en el sistema. Importá primero las farmacias.",
+    };
+
+  try {
+    const res = await prisma.user.createMany({ data, skipDuplicates: true });
+    revalidatePath("/admin/usuarios");
+    return {
+      ok: true,
+      importados: res.count,
+      omitidos: data.length - res.count,
+      noEncontradas: [...new Set(noEncontradas)],
+      errores,
+    };
+  } catch {
+    return { ok: false, error: "Error al guardar los usuarios." };
   }
 }
 
