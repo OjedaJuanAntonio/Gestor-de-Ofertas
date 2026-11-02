@@ -47,6 +47,23 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ── Marca Farmar ──────────────────────────────────────────────
+   La app usa el azul como color primario (botones, links, nav activo).
+   Remapeamos la escala `blue-*` de Tailwind al azul de Farmar (#004898)
+   para vestir TODA la app sin reescribir cada componente, y exponemos
+   tokens de marca (brand / brand-orange) para usos nuevos. */
+@theme {
+    --color-blue-300: #9db9d8;
+    --color-blue-500: #174a8a;
+    --color-blue-600: #004898;
+    --color-blue-700: #003a7a;
+
+    --color-brand: #004898;
+    --color-brand-dark: #003a7a;
+    --color-brand-orange: #d04000;
+    --color-brand-orange-dark: #a83300;
+}
+
 :root {
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
@@ -54,8 +71,8 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
+    --primary: #004898;
+    --primary-foreground: #ffffff;
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
