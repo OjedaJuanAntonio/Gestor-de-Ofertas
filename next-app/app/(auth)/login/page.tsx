@@ -1,9 +1,10 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
-import { Loader2, Package } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,14 +56,19 @@ function LoginForm() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-md space-y-6">
-        <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-600 text-white shadow-sm">
-            <Package className="w-6 h-6" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <Image
+            src="/farmar-logo.png"
+            alt="Farmar"
+            width={512}
+            height={512}
+            priority
+            className="h-auto w-44"
+          />
+          <div>
+            <h1 className="text-lg font-semibold text-slate-800">Gestor de Ofertas</h1>
+            <p className="text-sm text-slate-500">Red Farmacéutica Farmar</p>
           </div>
-          <h1 className="text-xl font-semibold text-slate-800">
-            Gestor de Ofertas
-          </h1>
-          <p className="text-sm text-slate-500">Droguería Central</p>
         </div>
 
         <Card className="shadow-sm border-slate-200">

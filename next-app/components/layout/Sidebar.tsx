@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
@@ -73,14 +74,18 @@ export function Sidebar({ role, nombre, email, badges = {} }: SidebarProps) {
   return (
     <aside className="flex flex-col w-60 min-h-screen bg-slate-900 text-slate-100 shrink-0">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-700">
-        <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-500 shrink-0">
-          <Package className="w-4 h-4 text-white" />
+      <div className="px-4 py-4 border-b border-slate-700">
+        <div className="rounded-lg bg-white px-3 py-3">
+          <Image
+            src="/farmar-logo-tagline.png"
+            alt="Farmar · Red Farmacéutica"
+            width={730}
+            height={213}
+            priority
+            className="h-auto w-full"
+          />
         </div>
-        <div className="leading-tight">
-          <p className="text-sm font-semibold">Gestor de Ofertas</p>
-          <p className="text-xs text-slate-400">Droguería Central</p>
-        </div>
+        <p className="mt-2.5 text-center text-xs font-medium text-slate-400">Gestor de Ofertas</p>
       </div>
 
       {/* Navegación */}

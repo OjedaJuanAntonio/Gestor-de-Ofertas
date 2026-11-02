@@ -16,7 +16,7 @@ export default async function UsuariosPage() {
         <UsuariosAdmin usuarios={usuarios} farmacias={farmacias} />
       </div>
       <div>
-        <h2 className="mb-3 text-lg font-semibold text-slate-700">Alta masiva de farmacias</h2>
+        <h2 className="mb-3 text-lg font-semibold text-slate-700">Alta masiva de usuarios de farmacia</h2>
         <ImportUsuarios />
       </div>
     </div>
