@@ -8,7 +8,7 @@ export const metadata = { title: "Nueva Solicitud · Gestor de Ofertas" };
 export default async function NuevaSolicitudPage() {
   const session = await auth();
   const user = session?.user as
-    | { role?: string; farmaciaId?: number | null }
+    | { role?: string; farmaciaId?: string | null }
     | undefined;
 
   const farmacias = await getFarmaciasActivas();

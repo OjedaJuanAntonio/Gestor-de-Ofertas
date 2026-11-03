@@ -43,7 +43,7 @@ export default async function SolicitudDetallePage({
 }) {
   const { id } = await params;
   const session = await auth();
-  const user = session?.user as { role?: string; farmaciaId?: number | null } | undefined;
+  const user = session?.user as { role?: string; farmaciaId?: string | null } | undefined;
   const farmaciaId = user?.role === "FARMACIA" ? (user.farmaciaId ?? null) : null;
 
   const solicitud = await getSolicitudDetalle(id, farmaciaId);

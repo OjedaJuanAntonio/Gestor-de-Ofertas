@@ -27,7 +27,9 @@ async function requireAdmin() {
 type Result = { ok: true; mensaje?: string } | { ok: false; error: string };
 
 // ── Farmacias ──────────────────────────────────────────────
+// El id de la farmacia ES su código interno (lo carga el admin).
 const FarmaciaSchema = z.object({
+  codigo: z.string().min(1, "El código es obligatorio."),
   nombre: z.string().min(2, "Nombre demasiado corto."),
   email: z.string().email("Email inválido.").optional().or(z.literal("")),
 });
@@ -39,18 +41,22 @@ export async function crearFarmacia(input: z.infer<typeof FarmaciaSchema>): Prom
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   try {
     await prisma.farmacia.create({
-      data: { nombre: p.data.nombre.trim(), email: p.data.email?.trim() || null },
+      data: {
+        id: p.data.codigo.trim(),
+        nombre: p.data.nombre.trim(),
+        email: p.data.email?.trim() || null,
+      },
     });
     revalidatePath("/admin/farmacias");
     return { ok: true, mensaje: "Farmacia creada." };
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
-      return { ok: false, error: "Ya existe una farmacia con ese nombre." };
+      return { ok: false, error: "Ya existe una farmacia con ese código o nombre." };
     return { ok: false, error: "No se pudo crear la farmacia." };
   }
 }
 
-export async function toggleFarmacia(id: number, activa: boolean): Promise<Result> {
+export async function toggleFarmacia(id: string, activa: boolean): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
   await prisma.farmacia.update({ where: { id }, data: { activa } });
@@ -75,7 +81,7 @@ export async function importarFarmacias(csvText: string): Promise<ImportFarmacia
     // createMany con skipDuplicates: las farmacias con nombre ya existente se
     // omiten (nombre es @unique) en vez de fallar todo el lote.
     const res = await prisma.farmacia.createMany({
-      data: validos.map((f) => ({ nombre: f.nombre, email: f.email })),
+      data: validos.map((f) => ({ id: f.codigo, nombre: f.nombre, email: f.email })),
       skipDuplicates: true,
     });
     revalidatePath("/admin/farmacias");
@@ -96,7 +102,7 @@ const UsuarioSchema = z.object({
   nombre: z.string().min(2, "Nombre demasiado corto."),
   password: z.string().min(10, "La contraseña debe tener al menos 10 caracteres."),
   role: z.enum(["ADMIN", "FARMACIA", "COMPRADOR", "PRECIOS"]),
-  farmaciaId: z.number().int().positive().optional().nullable(),
+  farmaciaId: z.string().optional().nullable(),
   laboratorios: z.array(z.string().min(1)).optional().default([]),
 });
 
@@ -234,7 +240,7 @@ export async function importarUsuariosFarmacia(csvText: string): Promise<ImportU
     nombre: string;
     password: string;
     role: "FARMACIA";
-    farmaciaId: number;
+    farmaciaId: string;
     mustChangePassword: boolean;
   }[] = [];
 
@@ -316,16 +322,12 @@ export async function importarArticulos(csvText: string): Promise<ImportResult> 
             where: { codigoBarra: a.codigoBarra },
             update: {
               descripcion: a.descripcion,
-              categoria: a.categoria,
-              stockReferencia: a.stockReferencia,
               proveedorId,
               activo: true,
             },
             create: {
               codigoBarra: a.codigoBarra,
               descripcion: a.descripcion,
-              categoria: a.categoria,
-              stockReferencia: a.stockReferencia,
               proveedorId,
             },
           });

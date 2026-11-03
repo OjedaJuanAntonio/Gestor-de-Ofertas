@@ -9,12 +9,12 @@ import { getSolicitudesFarmacia } from "@/lib/data/farmacia";
 // de los datos compartidos.
 // ─────────────────────────────────────────────────────────────
 
-let farmaciaId: number;
+let farmaciaId: string;
 const codigos: string[] = [];
 
 beforeAll(async () => {
   const farmacia = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Paginación Test ${Date.now()}`, email: null },
+    data: { id: `PAG-${Date.now()}`, nombre: `Farmacia Paginación Test ${Date.now()}`, email: null },
   });
   farmaciaId = farmacia.id;
 

@@ -67,8 +67,6 @@ export async function lookupArticulosBatch(
     select: {
       codigoBarra: true,
       descripcion: true,
-      categoria: true,
-      stockReferencia: true,
       proveedor: {
         select: {
           nombre: true,
@@ -91,8 +89,6 @@ export async function lookupArticulosBatch(
       descripcion: a.descripcion,
       // El DTO mantiene "laboratorio" = nombre del proveedor (no cambia la UI).
       laboratorio: a.proveedor.nombre,
-      categoria: a.categoria,
-      stockReferencia: a.stockReferencia,
       compradorId: comprador?.id ?? null,
       compradorNombre: comprador?.nombre ?? null,
       compradorMail: comprador?.email ?? null,

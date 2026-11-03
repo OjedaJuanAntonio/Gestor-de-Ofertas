@@ -30,7 +30,7 @@ const RowSchema = z.object({
 });
 
 const InputSchema = z.object({
-  farmaciaId: z.number().int().positive(),
+  farmaciaId: z.string().min(1),
   emailManual: z.string().optional(), // override si la farmacia no tiene mail
   idempotencyKey: z.string().min(8),
   rows: z.array(RowSchema).min(1, "La solicitud no tiene ítems."),
@@ -59,7 +59,7 @@ export async function enviarSolicitud(
   // 1) Autorización
   const session = await auth();
   const user = session?.user as
-    | { id: string; role?: string; farmaciaId?: number | null }
+    | { id: string; role?: string; farmaciaId?: string | null }
     | undefined;
   if (!user || (user.role !== "FARMACIA" && user.role !== "ADMIN")) {
     return { ok: false, error: "No autorizado." };

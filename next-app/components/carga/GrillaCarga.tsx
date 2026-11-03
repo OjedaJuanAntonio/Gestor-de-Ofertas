@@ -30,7 +30,6 @@ type Fila = {
   codigoBarra: string;
   descripcion: string;
   laboratorio: string;
-  stock: number | null;
   compradorNombre: string | null;
   compradorId: string | null;
   compradorMail: string | null;
@@ -50,7 +49,6 @@ function filaNueva(id: string = crypto.randomUUID()): Fila {
     codigoBarra: "",
     descripcion: "",
     laboratorio: "",
-    stock: null,
     compradorNombre: null,
     compradorId: null,
     compradorMail: null,
@@ -71,16 +69,14 @@ export function GrillaCarga({
   farmaciaFija,
 }: {
   farmacias: FarmaciaOption[];
-  farmaciaFija: number | null;
+  farmaciaFija: string | null;
 }) {
   // Prefijo estable entre server y cliente para el id de la fila inicial: con
   // crypto.randomUUID() en el render, server y cliente generaban ids distintos
   // y React tiraba un hydration mismatch en los <input id={`ean-...`}>. Las
   // filas que se agregan después son solo-cliente y pueden usar UUID aleatorio.
   const baseId = useId();
-  const [farmaciaId, setFarmaciaId] = useState<number | "">(
-    farmaciaFija ?? "",
-  );
+  const [farmaciaId, setFarmaciaId] = useState<string>(farmaciaFija ?? "");
   const [emailOverride, setEmailOverride] = useState("");
   const [filas, setFilas] = useState<Fila[]>(() => [filaNueva(`${baseId}-0`)]);
   const [idemKey, setIdemKey] = useState<string>(() => crypto.randomUUID());
@@ -187,7 +183,6 @@ export function GrillaCarga({
           codigoBarra: a.codigoBarra,
           descripcion: a.descripcion,
           laboratorio: a.laboratorio,
-          stock: a.stockReferencia,
           compradorNombre: a.compradorNombre,
           compradorId: a.compradorId,
           compradorMail: a.compradorMail,
@@ -284,7 +279,7 @@ export function GrillaCarga({
     setResultado(null);
     try {
       const res = await enviarSolicitud({
-        farmaciaId: Number(farmaciaId),
+        farmaciaId,
         emailManual: emailOverride.trim() || undefined,
         idempotencyKey: idemKey,
         rows: filasActivas.map((f) => ({
@@ -348,7 +343,7 @@ export function GrillaCarga({
             value={farmaciaId}
             disabled={!!farmaciaFija}
             onChange={(e) =>
-              setFarmaciaId(e.target.value ? Number(e.target.value) : "")
+              setFarmaciaId(e.target.value)
             }
             className="h-12 w-full rounded-lg border border-slate-300 bg-white px-3 text-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-300 disabled:bg-slate-100"
           >

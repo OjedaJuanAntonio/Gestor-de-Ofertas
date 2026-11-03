@@ -74,7 +74,9 @@ enum EmailEstado {
 // ─────────────────────────────────────────────
 
 model Farmacia {
-  id        Int      @id @default(autoincrement())
+  // El id ES el código interno de la farmacia (lo carga el usuario), no un
+  // autoincremental. Texto: admite códigos alfanuméricos y ceros a la izquierda.
+  id        String   @id
   nombre    String   @unique
   email     String? // Puede no tener mail → null = SIN_MAIL
   activa    Boolean  @default(true)
@@ -107,7 +109,7 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Vínculo usuario↔farmacia (operador asignado a una farmacia).
-  farmaciaId Int?
+  farmaciaId String?
   farmacia   Farmacia? @relation(fields: [farmaciaId], references: [id])
 
   // Un comprador es responsable de N proveedores (laboratorios).
@@ -155,12 +157,10 @@ model Proveedor {
 // ─────────────────────────────────────────────
 
 model Articulo {
-  codigoBarra     String   @id // EAN normalizado
-  descripcion     String
-  categoria       String?
-  stockReferencia Int?     @default(0) // Stock central de referencia
-  activo          Boolean  @default(true)
-  updatedAt       DateTime @updatedAt
+  codigoBarra String   @id // EAN normalizado
+  descripcion String
+  activo      Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
 
   // Proveedor (laboratorio) por clave foránea.
   proveedorId Int
@@ -183,7 +183,7 @@ model Solicitud {
   fechaEnvio DateTime        @default(now())
   estado     EstadoSolicitud @default(PENDIENTE)
 
-  farmaciaId Int
+  farmaciaId String
   farmacia   Farmacia @relation(fields: [farmaciaId], references: [id])
 
   // Snapshots históricos (trazabilidad si el maestro cambia después).

@@ -34,9 +34,9 @@ afterAll(async () => {
 describe("importarArticulos (integración, por lotes)", () => {
   it("crea artículos nuevos", async () => {
     const csv =
-      "codigoBarra,descripcion,laboratorio,categoria,stock\n" +
-      `${COD1},Producto Test Uno,LabTest,Rubro,100\n` +
-      `${COD2},Producto Test Dos,LabTest,Rubro,50\n`;
+      "codigoBarra,descripcion,laboratorio\n" +
+      `${COD1},Producto Test Uno,LabTest\n` +
+      `${COD2},Producto Test Dos,LabTest\n`;
 
     const res = await importarArticulos(csv);
     expect(res.ok).toBe(true);
@@ -53,8 +53,8 @@ describe("importarArticulos (integración, por lotes)", () => {
 
   it("actualiza un artículo existente (upsert)", async () => {
     const csv =
-      "codigoBarra,descripcion,laboratorio,categoria,stock\n" +
-      `${COD1},Producto Test Uno MODIFICADO,LabTest,Rubro,999\n`;
+      "codigoBarra,descripcion,laboratorio\n" +
+      `${COD1},Producto Test Uno MODIFICADO,LabTest\n`;
 
     const res = await importarArticulos(csv);
     expect(res.ok).toBe(true);
@@ -63,7 +63,6 @@ describe("importarArticulos (integración, por lotes)", () => {
 
     const a1 = await prisma.articulo.findUnique({ where: { codigoBarra: COD1 } });
     expect(a1?.descripcion).toBe("Producto Test Uno MODIFICADO");
-    expect(a1?.stockReferencia).toBe(999);
   });
 
   it("rechaza si no hay filas válidas", async () => {

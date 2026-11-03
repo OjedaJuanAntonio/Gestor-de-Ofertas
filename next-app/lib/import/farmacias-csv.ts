@@ -1,15 +1,18 @@
 // ─────────────────────────────────────────────────────────────
 // Parser de CSV de farmacias (alta masiva).
 // Cabecera flexible (orden libre, case-insensitive, con alias):
-//   nombre, email
+//   codigo, nombre, email   (codigo es el id/código interno de la farmacia)
 // Pura y testeable: separa filas válidas de errores con su línea.
 // ─────────────────────────────────────────────────────────────
 
-export type FarmaciaImport = { nombre: string; email: string | null };
+export type FarmaciaImport = { codigo: string; nombre: string; email: string | null };
 export type ImportError = { linea: number; motivo: string };
 export type ParseResult = { validos: FarmaciaImport[]; errores: ImportError[] };
 
 const ALIASES: Record<string, keyof FarmaciaImport> = {
+  codigo: "codigo",
+  código: "codigo",
+  id: "codigo",
   nombre: "nombre",
   farmacia: "nombre",
   razonsocial: "nombre",
@@ -55,6 +58,9 @@ export function parseFarmaciasCsv(text: string): ParseResult {
   const header = splitLine(lines[0], delimiter).map((h) => h.toLowerCase().replace(/\s+/g, ""));
   const colMap = header.map((h) => ALIASES[h] ?? null);
 
+  if (!colMap.includes("codigo")) {
+    return { validos, errores: [{ linea: 1, motivo: "Falta la columna 'codigo'." }] };
+  }
   if (!colMap.includes("nombre")) {
     return { validos, errores: [{ linea: 1, motivo: "Falta la columna 'nombre'." }] };
   }
@@ -71,14 +77,18 @@ export function parseFarmaciasCsv(text: string): ParseResult {
       if (key) (row as Record<string, unknown>)[key] = cells[idx] ?? "";
     });
 
+    const codigo = String(row.codigo ?? "").trim();
+    if (!codigo) {
+      errores.push({ linea, motivo: "Falta el código" });
+      continue;
+    }
     const nombre = String(row.nombre ?? "").trim();
     if (nombre.length < 2) {
       errores.push({ linea, motivo: "Nombre faltante o demasiado corto" });
       continue;
     }
-    const clave = nombre.toLowerCase();
-    if (seen.has(clave)) {
-      errores.push({ linea, motivo: `Nombre duplicado en el archivo: ${nombre}` });
+    if (seen.has(codigo)) {
+      errores.push({ linea, motivo: `Código duplicado en el archivo: ${codigo}` });
       continue;
     }
 
@@ -88,8 +98,8 @@ export function parseFarmaciasCsv(text: string): ParseResult {
       continue;
     }
 
-    seen.add(clave);
-    validos.push({ nombre, email: emailRaw || null });
+    seen.add(codigo);
+    validos.push({ codigo, nombre, email: emailRaw || null });
   }
 
   return { validos, errores };

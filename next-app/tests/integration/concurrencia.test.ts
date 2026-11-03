@@ -27,7 +27,7 @@ let adminId: string;
 let adminEmail: string;
 let c1Id: string;
 let preciosId: string;
-let farmaciaId: number;
+let farmaciaId: string;
 const solicitudIds: string[] = [];
 
 async function crearSolicitudConItem(estadoDecision: "PENDIENTE" | "APROBADO", opts: {
@@ -77,7 +77,7 @@ beforeAll(async () => {
   c1Id = c1.id;
   preciosId = precios.id;
   const f = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Concurrencia ${Date.now()}`, email: "concurrencia@test.com" },
+    data: { id: `CONC-${Date.now()}`, nombre: `Farmacia Concurrencia ${Date.now()}`, email: "concurrencia@test.com" },
   });
   farmaciaId = f.id;
 });

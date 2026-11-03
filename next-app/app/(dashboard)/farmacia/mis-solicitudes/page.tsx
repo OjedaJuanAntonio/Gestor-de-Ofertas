@@ -77,7 +77,7 @@ export default async function MisSolicitudesPage({
   const dir: Dir = sp.dir === "asc" ? "asc" : "desc";
 
   const session = await auth();
-  const user = session?.user as { role?: string; farmaciaId?: number | null } | undefined;
+  const user = session?.user as { role?: string; farmaciaId?: string | null } | undefined;
   const farmaciaId = user?.role === "FARMACIA" ? (user.farmaciaId ?? null) : null;
   const data = await getSolicitudesFarmacia(farmaciaId, {
     page,
