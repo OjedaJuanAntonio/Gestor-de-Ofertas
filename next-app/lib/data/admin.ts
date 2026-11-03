@@ -20,7 +20,21 @@ export async function listUsuarios() {
       role: true,
       activo: true,
       farmacia: { select: { nombre: true } },
-      laboratorios: { select: { laboratorio: true } },
+      proveedores: { select: { nombre: true } },
+    },
+  });
+}
+
+/** Proveedores (laboratorios) con su comprador responsable y cuántos artículos tienen. */
+export async function listProveedores() {
+  return prisma.proveedor.findMany({
+    orderBy: { nombre: "asc" },
+    select: {
+      id: true,
+      nombre: true,
+      activo: true,
+      comprador: { select: { id: true, nombre: true } },
+      _count: { select: { articulos: true } },
     },
   });
 }
@@ -67,7 +81,7 @@ export async function listCompradoresOptions() {
       id: true,
       nombre: true,
       email: true,
-      laboratorios: { select: { laboratorio: true } },
+      proveedores: { select: { nombre: true } },
     },
   });
 }

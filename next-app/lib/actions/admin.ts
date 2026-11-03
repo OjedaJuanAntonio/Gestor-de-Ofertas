@@ -112,19 +112,30 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
 
   try {
     const hash = await bcrypt.hash(d.password, 10);
+    // Para un comprador, los "laboratorios" que se escriben se traducen en
+    // asignarle esos proveedores (uno por nombre; se crean si no existen).
     const labs = d.role === "COMPRADOR"
       ? [...new Set(d.laboratorios.map((l) => l.trim()).filter(Boolean))]
       : [];
-    await prisma.user.create({
-      data: {
-        email: d.email.trim().toLowerCase(),
-        nombre: d.nombre.trim(),
-        password: hash,
-        role: d.role,
-        farmaciaId: d.role === "FARMACIA" ? d.farmaciaId : null,
-        laboratorios: labs.length ? { create: labs.map((laboratorio) => ({ laboratorio })) } : undefined,
-      },
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: d.email.trim().toLowerCase(),
+          nombre: d.nombre.trim(),
+          password: hash,
+          role: d.role,
+          farmaciaId: d.role === "FARMACIA" ? d.farmaciaId : null,
+        },
+      });
+      for (const nombre of labs) {
+        await tx.proveedor.upsert({
+          where: { nombre },
+          update: { compradorId: user.id },
+          create: { nombre, compradorId: user.id },
+        });
+      }
     });
+    if (labs.length) invalidarTodosLosArticulos();
     revalidatePath("/admin/usuarios");
     return { ok: true, mensaje: "Usuario creado." };
   } catch (e) {
@@ -277,27 +288,48 @@ export async function importarArticulos(csvText: string): Promise<ImportResult> 
   if (validos.length === 0)
     return { ok: false, error: "No hay filas válidas para importar." };
 
-  // Upsert por lotes: el maestro real tiene ~155.000 artículos y hacerlo en una
-  // sola transacción (una query por fila) excede tiempos/límites de Postgres.
-  // Cada lote va en su propia transacción acotada.
-  const LOTE = 1000;
   try {
+    // Resolver/crear los proveedores (laboratorios) por nombre, una sola vez.
+    // El CSV sigue trayendo el nombre del laboratorio; acá se mapea a su FK.
+    const nombresProv = [...new Set(validos.map((a) => a.laboratorio))];
+    const provIdPorNombre = new Map<string, number>();
+    for (const nombre of nombresProv) {
+      const p = await prisma.proveedor.upsert({
+        where: { nombre },
+        update: {},
+        create: { nombre },
+        select: { id: true, nombre: true },
+      });
+      provIdPorNombre.set(p.nombre, p.id);
+    }
+
+    // Upsert por lotes: el maestro real tiene ~155.000 artículos y hacerlo en una
+    // sola transacción (una query por fila) excede tiempos/límites de Postgres.
+    // Cada lote va en su propia transacción acotada.
+    const LOTE = 1000;
     for (let i = 0; i < validos.length; i += LOTE) {
       const lote = validos.slice(i, i + LOTE);
       await prisma.$transaction(
-        lote.map((a) =>
-          prisma.articulo.upsert({
+        lote.map((a) => {
+          const proveedorId = provIdPorNombre.get(a.laboratorio)!;
+          return prisma.articulo.upsert({
             where: { codigoBarra: a.codigoBarra },
             update: {
               descripcion: a.descripcion,
-              laboratorio: a.laboratorio,
               categoria: a.categoria,
               stockReferencia: a.stockReferencia,
+              proveedorId,
               activo: true,
             },
-            create: a,
-          }),
-        ),
+            create: {
+              codigoBarra: a.codigoBarra,
+              descripcion: a.descripcion,
+              categoria: a.categoria,
+              stockReferencia: a.stockReferencia,
+              proveedorId,
+            },
+          });
+        }),
       );
     }
     invalidarTodosLosArticulos();
@@ -325,5 +357,59 @@ export async function cancelarCorreo(id: string): Promise<Result> {
   if (!admin) return { ok: false, error: "No autorizado." };
   await prisma.emailOutbox.update({ where: { id }, data: { estado: "CANCELADO" } });
   revalidatePath("/admin/correos");
+  return { ok: true };
+}
+
+// ── Proveedores (laboratorios) ─────────────────────────────
+const ProveedorSchema = z.object({
+  nombre: z.string().min(2, "Nombre demasiado corto."),
+  compradorId: z.string().optional().nullable(),
+});
+
+export async function crearProveedor(input: z.infer<typeof ProveedorSchema>): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  const p = ProveedorSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  try {
+    await prisma.proveedor.create({
+      data: { nombre: p.data.nombre.trim(), compradorId: p.data.compradorId || null },
+    });
+    invalidarTodosLosArticulos();
+    revalidatePath("/admin/proveedores");
+    return { ok: true, mensaje: "Proveedor creado." };
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
+      return { ok: false, error: "Ya existe un proveedor con ese nombre." };
+    return { ok: false, error: "No se pudo crear el proveedor." };
+  }
+}
+
+/** Asigna (o quita, con null) el comprador responsable de un proveedor. */
+export async function asignarCompradorProveedor(
+  id: number,
+  compradorId: string | null,
+): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  try {
+    await prisma.proveedor.update({
+      where: { id },
+      data: { compradorId: compradorId || null },
+    });
+    // El cambio de responsable afecta el ruteo → invalidar la caché de lookups.
+    invalidarTodosLosArticulos();
+    revalidatePath("/admin/proveedores");
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "No se pudo asignar el comprador." };
+  }
+}
+
+export async function toggleProveedor(id: number, activo: boolean): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  await prisma.proveedor.update({ where: { id }, data: { activo } });
+  revalidatePath("/admin/proveedores");
   return { ok: true };
 }

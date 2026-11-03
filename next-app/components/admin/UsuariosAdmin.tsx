@@ -15,7 +15,7 @@ type Usuario = {
   role: Role;
   activo: boolean;
   farmacia: { nombre: string } | null;
-  laboratorios: { laboratorio: string }[];
+  proveedores: { nombre: string }[];
 };
 type FarmaciaOpt = { id: number; nombre: string };
 
@@ -150,7 +150,7 @@ export function UsuariosAdmin({
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {u.role === "FARMACIA" && (u.farmacia?.nombre ?? "—")}
-                  {u.role === "COMPRADOR" && (u.laboratorios.map((l) => l.laboratorio).join(", ") || "—")}
+                  {u.role === "COMPRADOR" && (u.proveedores.map((p) => p.nombre).join(", ") || "—")}
                   {(u.role === "ADMIN" || u.role === "PRECIOS") && "—"}
                 </td>
                 <td className="px-4 py-3 text-center">

@@ -7,6 +7,7 @@ import { signOut } from "next-auth/react";
 import {
   Package,
   Users,
+  Factory,
   Upload,
   ClipboardList,
   Inbox,
@@ -34,6 +35,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Reportes",        href: "/admin/analytics", icon: BarChart3 },
     { label: "Usuarios",        href: "/admin/usuarios",  icon: Users },
     { label: "Farmacias",       href: "/admin/farmacias", icon: Package },
+    { label: "Proveedores",     href: "/admin/proveedores", icon: Factory },
     { label: "Artículos / CSV", href: "/admin/articulos", icon: Upload },
     { label: "Sin asignar",     href: "/admin/sin-asignar", icon: UserX },
     { label: "Correos",         href: "/admin/correos",   icon: Mail },

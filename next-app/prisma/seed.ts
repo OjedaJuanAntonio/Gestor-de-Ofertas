@@ -37,39 +37,19 @@ async function main() {
     );
   }
 
-  // ── Compradores y sus laboratorios ─────────────────────────
-  // Un comprador maneja N laboratorios (corrección clave del modelo).
+  // ── Compradores ────────────────────────────────────────────
   const compradoresData = [
-    {
-      email: "c1@drogueria.com",
-      nombre: "Claudio Acevedo",
-      labs: ["Bayer", "Roche"],
-    },
-    {
-      email: "s1@drogueria.com",
-      nombre: "Sandra Ibáñez",
-      labs: ["Pfizer", "Sanofi"],
-    },
+    { email: "c1@drogueria.com", nombre: "Claudio Acevedo" },
+    { email: "s1@drogueria.com", nombre: "Sandra Ibáñez" },
   ];
-
+  const compradorId: Record<string, string> = {};
   for (const c of compradoresData) {
     const user = await prisma.user.upsert({
       where: { email: c.email },
       update: { nombre: c.nombre, role: "COMPRADOR", password: hash, activo: true },
-      create: {
-        email: c.email,
-        nombre: c.nombre,
-        role: "COMPRADOR",
-        password: hash,
-      },
+      create: { email: c.email, nombre: c.nombre, role: "COMPRADOR", password: hash },
     });
-    for (const lab of c.labs) {
-      await prisma.laboratorioComprador.upsert({
-        where: { userId_laboratorio: { userId: user.id, laboratorio: lab } },
-        update: {},
-        create: { userId: user.id, laboratorio: lab },
-      });
-    }
+    compradorId[c.email] = user.id;
   }
 
   // ── Admin, operador de farmacia, precios ───────────────────
@@ -107,9 +87,26 @@ async function main() {
     },
   });
 
+  // ── Proveedores (laboratorios) y su comprador responsable ──
+  // "Genéricos SA" queda SIN comprador a propósito (camino "sinComprador").
+  const proveedoresData = [
+    { nombre: "Bayer", comprador: compradorId["c1@drogueria.com"] },
+    { nombre: "Roche", comprador: compradorId["c1@drogueria.com"] },
+    { nombre: "Pfizer", comprador: compradorId["s1@drogueria.com"] },
+    { nombre: "Sanofi", comprador: compradorId["s1@drogueria.com"] },
+    { nombre: "Genéricos SA", comprador: null as string | null },
+  ];
+  const proveedorId: Record<string, number> = {};
+  for (const p of proveedoresData) {
+    const prov = await prisma.proveedor.upsert({
+      where: { nombre: p.nombre },
+      update: { compradorId: p.comprador ?? null },
+      create: { nombre: p.nombre, compradorId: p.comprador ?? null },
+    });
+    proveedorId[p.nombre] = prov.id;
+  }
+
   // ── Artículos (maestro) ────────────────────────────────────
-  // Incluye un laboratorio SIN comprador asignado ("Genéricos SA")
-  // para ejercitar el camino "sinComprador".
   const articulos = [
     { codigoBarra: "7791234500011", descripcion: "Aspirina 500mg x20", laboratorio: "Bayer", categoria: "Analgésicos", stockReferencia: 320 },
     { codigoBarra: "7791234500028", descripcion: "Bepanthen Crema 30g", laboratorio: "Bayer", categoria: "Dermatología", stockReferencia: 75 },
@@ -125,10 +122,12 @@ async function main() {
     { codigoBarra: "7791234500127", descripcion: "Ibuprofeno Genérico 400mg x20", laboratorio: "Genéricos SA", categoria: "Analgésicos", stockReferencia: 850 },
   ];
   for (const a of articulos) {
+    const { laboratorio, ...rest } = a;
+    const data = { ...rest, proveedorId: proveedorId[laboratorio] };
     await prisma.articulo.upsert({
       where: { codigoBarra: a.codigoBarra },
-      update: a,
-      create: a,
+      update: data,
+      create: data,
     });
   }
 

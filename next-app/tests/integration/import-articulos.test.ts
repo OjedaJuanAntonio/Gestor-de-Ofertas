@@ -27,6 +27,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await prisma.articulo.deleteMany({ where: { codigoBarra: { in: [COD1, COD2] } } });
+  await prisma.proveedor.deleteMany({ where: { nombre: "LabTest" } });
   await prisma.$disconnect();
 });
 
@@ -42,9 +43,12 @@ describe("importarArticulos (integración, por lotes)", () => {
     if (!res.ok) return;
     expect(res.importados).toBe(2);
 
-    const a1 = await prisma.articulo.findUnique({ where: { codigoBarra: COD1 } });
+    const a1 = await prisma.articulo.findUnique({
+      where: { codigoBarra: COD1 },
+      include: { proveedor: true },
+    });
     expect(a1?.descripcion).toBe("Producto Test Uno");
-    expect(a1?.laboratorio).toBe("LabTest");
+    expect(a1?.proveedor.nombre).toBe("LabTest");
   });
 
   it("actualiza un artículo existente (upsert)", async () => {

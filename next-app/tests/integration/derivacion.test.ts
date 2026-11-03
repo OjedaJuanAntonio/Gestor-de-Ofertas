@@ -72,8 +72,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await prisma.auditLog.deleteMany({ where: { entityId: itemId } });
   await prisma.solicitud.deleteMany({ where: { id: solicitudId } });
-  await prisma.laboratorioComprador.deleteMany({
-    where: { userId: compradorId, laboratorio: LAB_HUERFANO },
+  // Restaura el proveedor huérfano a "sin comprador" (como lo deja el seed).
+  await prisma.proveedor.updateMany({
+    where: { nombre: LAB_HUERFANO },
+    data: { compradorId: null },
   });
   await prisma.$disconnect();
 });
@@ -107,10 +109,9 @@ describe("reasignarItems (integración)", () => {
     expect(item.compradorMailHistorico).toBe(compradorEmail);
     expect(item.estadoDecision).toBe("PENDIENTE"); // sigue pendiente, ahora en la bandeja del comprador
 
-    const regla = await prisma.laboratorioComprador.findUnique({
-      where: { userId_laboratorio: { userId: compradorId, laboratorio: LAB_HUERFANO } },
-    });
-    expect(regla).not.toBeNull();
+    // La "regla" ahora es el proveedor con su comprador responsable (FK).
+    const prov = await prisma.proveedor.findUnique({ where: { nombre: LAB_HUERFANO } });
+    expect(prov?.compradorId).toBe(compradorId);
 
     const auditoria = await prisma.auditLog.findFirst({
       where: { entityId: itemId, action: "DERIVAR" },
