@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
-import { Loader2, Plus, Trash2, AlertTriangle, CheckCircle2, Send } from "lucide-react";
+import {
+  Loader2,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  Send,
+  ScanLine,
+  ClipboardPaste,
+  CornerDownLeft,
+} from "lucide-react";
 import type { FarmaciaOption } from "@/lib/data/farmacias";
 import type { ArticuloLookup, MotivoSolicitud } from "@/types";
 import { MOTIVOS } from "@/types";
@@ -255,6 +265,18 @@ export function GrillaCarga({
     !filasActivas.some((f) => f.estado === "BUSCANDO") &&
     farmaciaId !== "";
 
+  // Qué falta para poder enviar (se muestra junto al botón cuando está deshabilitado).
+  const falta =
+    farmaciaId === ""
+      ? "Elegí una farmacia"
+      : filasActivas.length === 0
+        ? "Cargá al menos un ítem"
+        : filasActivas.some((f) => f.estado === "BUSCANDO")
+          ? "Buscando productos…"
+          : erroresPorFila.size > 0
+            ? `${erroresPorFila.size} fila(s) con error`
+            : null;
+
   // ── Envío ────────────────────────────────────────────────────
   async function confirmarEnvio() {
     setConfirmando(false);
@@ -360,12 +382,27 @@ export function GrillaCarga({
         </div>
       </div>
 
+      {/* ── Ayuda rápida ── */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-sm text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <ScanLine className="h-4 w-4 text-brand" /> Escaneá o escribí el código
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <ClipboardPaste className="h-4 w-4 text-brand" /> Pegá una columna desde Excel para cargar varios
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <CornerDownLeft className="h-4 w-4 text-brand" />
+          <kbd className="rounded border border-slate-300 bg-slate-50 px-1 text-xs">Enter</kbd> pasa a cantidad
+        </span>
+      </div>
+
       {/* ── Grilla ── */}
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
-              <th className="w-10 px-2 py-3 text-center">#</th>
+          <thead className="sticky top-0 z-10 bg-slate-50">
+            <tr className="border-b border-slate-200 text-sm font-semibold text-slate-600">
+              <th className="w-9 px-1 py-3"><span className="sr-only">Estado</span></th>
+              <th className="w-8 px-1 py-3 text-center text-slate-400">#</th>
               <th className="px-2 py-3 min-w-[170px]">Código de barras</th>
               <th className="px-2 py-3 min-w-[220px]">Descripción</th>
               <th className="px-2 py-3 min-w-[120px]">Laboratorio</th>
@@ -380,6 +417,8 @@ export function GrillaCarga({
             {filas.map((fila, idx) => {
               const err = erroresPorFila.get(fila.id);
               const esError = fila.estado === "ERROR" || (!!err && err !== "Buscando…");
+              const buscando = fila.estado === "BUSCANDO";
+              const ok = fila.estado === "OK" && !esError;
               return (
                 <tr
                   key={fila.id}
@@ -391,7 +430,18 @@ export function GrillaCarga({
                         : "border-b border-slate-100"
                   }
                 >
-                  <td className="px-2 py-1.5 text-center text-sm text-slate-400">{idx + 1}</td>
+                  <td className="px-1 py-1.5 text-center">
+                    {buscando ? (
+                      <Loader2 className="mx-auto h-4 w-4 animate-spin text-blue-500" />
+                    ) : esError ? (
+                      <AlertTriangle className="mx-auto h-4 w-4 text-red-500" />
+                    ) : ok ? (
+                      <CheckCircle2 className="mx-auto h-4 w-4 text-green-600" />
+                    ) : (
+                      <span className="mx-auto block h-1.5 w-1.5 rounded-full bg-slate-200" />
+                    )}
+                  </td>
+                  <td className="px-1 py-1.5 text-center text-sm text-slate-400">{idx + 1}</td>
                   <td className="px-2 py-1.5">
                     <div className="relative">
                       <input
@@ -513,38 +563,45 @@ export function GrillaCarga({
         </table>
       </div>
 
-      {/* ── Pie: resumen + acciones ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="text-base text-slate-600">
+      {/* ── Pie: resumen + acciones (fijo abajo) ── */}
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-[0_-4px_14px_rgba(0,0,0,0.06)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-base text-slate-600">
           <button
             onClick={() => setFilas((p) => [...p, filaNueva()])}
             className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:text-blue-700"
           >
             <Plus className="h-4 w-4" /> Agregar fila
           </button>
-          <span className="ml-4">
-            <strong>{filasActivas.length}</strong> ítem(s) ·{" "}
-            {erroresPorFila.size > 0 ? (
-              <span className="font-semibold text-red-600">
-                {erroresPorFila.size} con error
-              </span>
-            ) : (
-              <span className="font-semibold text-green-600">todo OK</span>
-            )}
+          <span>
+            <strong>{filasActivas.length}</strong> ítem(s)
           </span>
-        </div>
-        <Button
-          onClick={() => setConfirmando(true)}
-          disabled={!grillaValida || enviando}
-          className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
-        >
-          {enviando ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <Send className="h-5 w-5" />
+          {erroresPorFila.size > 0 && (
+            <span className="inline-flex items-center gap-1 font-semibold text-red-600">
+              <AlertTriangle className="h-4 w-4" /> {erroresPorFila.size} con error
+            </span>
           )}
-          Enviar solicitud
-        </Button>
+        </div>
+        <div className="flex items-center gap-3">
+          {falta ? (
+            <span className="text-sm font-medium text-amber-600">{falta}</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-600">
+              <CheckCircle2 className="h-4 w-4" /> Listo para enviar
+            </span>
+          )}
+          <Button
+            onClick={() => setConfirmando(true)}
+            disabled={!grillaValida || enviando}
+            className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
+          >
+            {enviando ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+            Enviar solicitud
+          </Button>
+        </div>
       </div>
 
       {/* ── Modal de confirmación ── */}
