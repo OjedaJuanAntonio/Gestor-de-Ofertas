@@ -2,7 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, CheckCircle2, AlertTriangle, ThumbsUp, ThumbsDown, Inbox } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  ThumbsUp,
+  ThumbsDown,
+  Inbox,
+  Search,
+} from "lucide-react";
 import type { ItemBandeja } from "@/lib/data/comprador";
 import { MOTIVO_LABEL } from "@/types";
 import type { MotivoSolicitud } from "@/types";
@@ -75,6 +84,14 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
   const aprobadosCount = conDecision.filter(([, s]) => s.decision === "APROBADO").length;
   const rechazadosCount = conDecision.length - aprobadosCount;
 
+  // Qué falta para poder confirmar (se muestra junto al botón).
+  const faltaConfirmar =
+    conDecision.length === 0
+      ? "Marcá al menos una decisión"
+      : aprobadosSinCondicion.length > 0
+        ? `Falta la condición en ${aprobadosSinCondicion.length} aprobado(s)`
+        : null;
+
   async function ejecutar() {
     setConfirmando(false);
     setEnviando(true);
@@ -114,12 +131,15 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
   return (
     <div className="space-y-4 text-[15px]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <input
-          placeholder="Filtrar por farmacia, lab, producto o código…"
-          value={filtro}
-          onChange={(e) => setFiltro(e.target.value)}
-          className="h-11 w-full max-w-md rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
-        />
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            placeholder="Filtrar por farmacia, lab, producto o código…"
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            className="h-11 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+          />
+        </div>
         <span className="text-base text-slate-600">
           <strong>{items.length}</strong> pendiente(s) · <strong>{conDecision.length}</strong> con decisión
         </span>
@@ -134,15 +154,15 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
         <table className="w-full border-collapse text-left">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50">
+            <tr className="border-b border-slate-200 text-sm font-semibold text-slate-600">
               <th className="px-3 py-3">Solicitud / Farmacia</th>
-              <th className="px-3 py-3 min-w-[220px]">Producto</th>
+              <th className="px-3 py-3 min-w-[200px]">Producto</th>
               <th className="px-3 py-3">Lab</th>
               <th className="px-3 py-3 w-20 text-center">Cant.</th>
               <th className="px-3 py-3">Motivo</th>
-              <th className="px-3 py-3 w-44 text-center">Decisión</th>
-              <th className="px-3 py-3 min-w-[200px]">Condición / Motivo</th>
+              <th className="px-3 py-3 w-40 text-center">Decisión</th>
+              <th className="px-3 py-3 min-w-[170px]">Condición / Motivo</th>
             </tr>
           </thead>
           <tbody>
@@ -164,7 +184,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
                   }
                 >
                   <td className="px-3 py-2.5 align-top">
-                    <div className="font-mono text-sm text-slate-500">{it.solicitudCodigo}</div>
+                    <div className="whitespace-nowrap font-mono text-sm text-slate-500">{it.solicitudCodigo}</div>
                     <div className="font-medium text-slate-700">{it.farmaciaNombre}</div>
                     <div className="text-xs text-slate-400">{fmtFecha(it.fechaEnvio)}</div>
                   </td>
@@ -237,15 +257,37 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
         </table>
       </div>
 
-      <div className="flex items-center justify-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
-        <Button
-          onClick={pedirConfirmacion}
-          disabled={enviando || conDecision.length === 0}
-          className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
-        >
-          {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-          Confirmar decisiones ({conDecision.length})
-        </Button>
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-[0_-4px_14px_rgba(0,0,0,0.06)] backdrop-blur">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-base text-slate-600">
+          <span><strong>{conDecision.length}</strong> con decisión</span>
+          {aprobadosCount > 0 && (
+            <span className="inline-flex items-center gap-1 font-semibold text-green-600">
+              <CheckCircle2 className="h-4 w-4" /> {aprobadosCount} aprobado(s)
+            </span>
+          )}
+          {rechazadosCount > 0 && (
+            <span className="inline-flex items-center gap-1 font-semibold text-red-600">
+              <XCircle className="h-4 w-4" /> {rechazadosCount} rechazado(s)
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          {faltaConfirmar ? (
+            <span className="text-sm font-medium text-amber-600">{faltaConfirmar}</span>
+          ) : (
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-600">
+              <CheckCircle2 className="h-4 w-4" /> Listo para confirmar
+            </span>
+          )}
+          <Button
+            onClick={pedirConfirmacion}
+            disabled={enviando || conDecision.length === 0}
+            className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
+          >
+            {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+            Confirmar decisiones ({conDecision.length})
+          </Button>
+        </div>
       </div>
 
       <ConfirmDialog
