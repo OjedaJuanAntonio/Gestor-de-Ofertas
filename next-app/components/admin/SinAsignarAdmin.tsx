@@ -127,7 +127,7 @@ function GrupoLab({
         </thead>
         <tbody>
           {items.map((it) => (
-            <tr key={it.id} className="border-b border-slate-100 text-sm">
+            <tr key={it.id} className="border-b border-slate-100 text-sm hover:bg-slate-50">
               <td className="px-4 py-2">
                 <div className="font-medium text-slate-800">{it.articulo.descripcion}</div>
                 <div className="text-xs text-slate-400">{it.codigoBarra}</div>
