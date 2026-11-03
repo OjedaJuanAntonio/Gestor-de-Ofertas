@@ -147,8 +147,7 @@ export function PanelPrecios({
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="text-base text-slate-600">
-          <strong>{total}</strong> ítem(s) aprobados pendientes ·{" "}
-          <strong>{seleccionados.length}</strong> seleccionados
+          <strong>{total}</strong> ítem(s) aprobados pendientes de carga
         </span>
       </div>
 
@@ -162,7 +161,7 @@ export function PanelPrecios({
         <>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full border-collapse text-left tabular-nums">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-slate-100">
                 <tr className="border-b border-slate-300 bg-slate-100 text-xs font-semibold uppercase tracking-wide text-slate-600">
                   <th className="w-12 border-r border-slate-200 px-3 py-2 text-center">
                     <input
@@ -238,16 +237,30 @@ export function PanelPrecios({
             </table>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-            <Paginador page={page} pages={pages} />
-            <Button
-              onClick={pedirConfirmacion}
-              disabled={enviando || seleccionados.length === 0}
-              className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
-            >
-              {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <PackageCheck className="h-5 w-5" />}
-              Confirmar cargas en sistema ({seleccionados.length})
-            </Button>
+          <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-4 shadow-[0_-4px_14px_rgba(0,0,0,0.06)] backdrop-blur">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+              <Paginador page={page} pages={pages} />
+              <span className="text-base text-slate-600">
+                <strong>{seleccionados.length}</strong> seleccionado(s)
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              {seleccionados.length === 0 ? (
+                <span className="text-sm font-medium text-amber-600">Marcá los ítems ya cargados en el ERP</span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-sm font-semibold text-green-600">
+                  <CheckCircle2 className="h-4 w-4" /> Listo para confirmar
+                </span>
+              )}
+              <Button
+                onClick={pedirConfirmacion}
+                disabled={enviando || seleccionados.length === 0}
+                className="h-12 gap-2 bg-blue-600 px-6 text-lg hover:bg-blue-700"
+              >
+                {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <PackageCheck className="h-5 w-5" />}
+                Confirmar cargas en sistema ({seleccionados.length})
+              </Button>
+            </div>
           </div>
         </>
       )}
