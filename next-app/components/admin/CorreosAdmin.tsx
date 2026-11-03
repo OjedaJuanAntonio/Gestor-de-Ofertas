@@ -49,7 +49,7 @@ export function CorreosAdmin({ correos }: { correos: Correo[] }) {
         </thead>
         <tbody>
           {correos.map((c) => (
-            <tr key={c.id} className="border-b border-slate-100">
+            <tr key={c.id} className="border-b border-slate-100 hover:bg-slate-50">
               <td className="px-4 py-3 font-medium text-slate-700">{c.destinatario}</td>
               <td className="px-4 py-3">
                 <div className="text-slate-700">{c.asunto}</div>

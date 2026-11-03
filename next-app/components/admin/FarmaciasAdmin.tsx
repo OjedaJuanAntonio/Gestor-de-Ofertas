@@ -80,7 +80,7 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
           </thead>
           <tbody>
             {farmacias.map((f) => (
-              <tr key={f.id} className="border-b border-slate-100">
+              <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 font-medium text-slate-800">{f.nombre}</td>
                 <td className="px-4 py-3 text-slate-600">{f.email ?? <span className="text-slate-300">SIN_MAIL</span>}</td>
                 <td className="px-4 py-3 text-center text-slate-600">{f._count.solicitudes}</td>

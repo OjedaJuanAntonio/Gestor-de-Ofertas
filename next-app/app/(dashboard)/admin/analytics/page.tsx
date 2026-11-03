@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { BarChart3, Download } from "lucide-react";
 import { getRegistrosMetrica } from "@/lib/data/analytics";
 import {
   tiempoRespuestaComprador,
@@ -31,12 +31,17 @@ export default async function AnalyticsPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">Reportes gerenciales</h1>
-          <p className="mt-1 text-base text-slate-600">
-            Auditoría del proceso: tiempos, efectividad y volumen.
-          </p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+            <BarChart3 className="h-5 w-5" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Reportes gerenciales</h1>
+            <p className="mt-0.5 text-base text-slate-600">
+              Auditoría del proceso: tiempos, efectividad y volumen.
+            </p>
+          </div>
         </div>
         <a
           href="/api/export/analytics"

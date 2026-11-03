@@ -129,8 +129,8 @@ export function UsuariosAdmin({
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50">
+            <tr className="border-b border-slate-200 text-sm font-semibold text-slate-600">
               <th className="px-4 py-3">Nombre / Email</th>
               <th className="px-4 py-3">Rol</th>
               <th className="px-4 py-3">Asignación</th>
@@ -140,7 +140,7 @@ export function UsuariosAdmin({
           </thead>
           <tbody>
             {usuarios.map((u) => (
-              <tr key={u.id} className="border-b border-slate-100">
+              <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3">
                   <div className="font-medium text-slate-800">{u.nombre}</div>
                   <div className="text-sm text-slate-400">{u.email}</div>
