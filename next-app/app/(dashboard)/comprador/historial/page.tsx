@@ -1,3 +1,4 @@
+import { History, Search } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getHistoricoComprador } from "@/lib/data/comprador";
 import { SortableTh } from "@/components/historial/SortableTh";
@@ -92,10 +93,17 @@ export default async function HistorialCompradorPage({
 
   return (
     <div className="mx-auto max-w-6xl">
-      <h1 className="mb-1 text-2xl font-bold text-slate-800">Historial</h1>
-      <p className="mb-5 text-base text-slate-600">
-        Ítems que ya resolviste: aprobados (con su condición) y rechazados (con su motivo).
-      </p>
+      <div className="mb-5 flex items-start gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+          <History className="h-5 w-5" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Historial</h1>
+          <p className="mt-0.5 text-base text-slate-600">
+            Ítems que ya resolviste: aprobados (con su condición) y rechazados (con su motivo).
+          </p>
+        </div>
+      </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <FiltroChip href={qs({ estado: null, q, desde, hasta, sort, dir })} activo={estado === null}>
@@ -130,8 +138,8 @@ export default async function HistorialCompradorPage({
         <>
           <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
             <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+              <thead className="sticky top-0 z-10 bg-slate-50">
+                <tr className="border-b border-slate-200 text-sm font-semibold text-slate-600">
                   <SortableTh className="px-4 py-3" label="Fecha" col="fecha" activeSort={sort} dir={dir} hrefFor={hrefFor} />
                   <SortableTh className="px-4 py-3" label="Solicitud" col="solicitud" activeSort={sort} dir={dir} hrefFor={hrefFor} />
                   <SortableTh className="px-4 py-3" label="Farmacia" col="farmacia" activeSort={sort} dir={dir} hrefFor={hrefFor} />
@@ -144,7 +152,7 @@ export default async function HistorialCompradorPage({
               </thead>
               <tbody>
                 {data.items.map((it) => (
-                  <tr key={it.id} className="border-b border-slate-100">
+                  <tr key={it.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-4 py-3 text-slate-600">{fmt(it.fechaAprobacion)}</td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-500">{it.solicitudCodigo}</td>
                     <td className="px-4 py-3 text-slate-700">{it.farmaciaNombre}</td>
@@ -231,14 +239,17 @@ function Buscador({
       {estado && <input type="hidden" name="estado" value={estado} />}
       {sort !== SORT_DEFECTO && <input type="hidden" name="sort" value={sort} />}
       {dir !== "desc" && <input type="hidden" name="dir" value={dir} />}
-      <input
-        type="search"
-        name="q"
-        defaultValue={q}
-        placeholder={placeholder}
-        aria-label="Buscar"
-        className="h-10 w-full max-w-md rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
-      />
+      <div className="relative w-full max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder={placeholder}
+          aria-label="Buscar"
+          className="h-10 w-full rounded-lg border border-slate-300 pl-9 pr-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+        />
+      </div>
       <label className="flex flex-col text-xs text-slate-500">
         Desde
         <input
