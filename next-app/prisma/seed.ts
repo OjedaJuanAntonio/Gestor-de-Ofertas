@@ -21,55 +21,35 @@ async function main() {
 
   // ── Farmacias ──────────────────────────────────────────────
   const farmaciasData = [
-    { nombre: "Farmacia Central 3303", email: "central3303@farma.com" },
-    { nombre: "Farmacia del Pueblo 1102", email: "pueblo1102@farma.com" },
-    { nombre: "Farmacia San Martín 4501", email: "sanmartin4501@farma.com" },
-    { nombre: "Farmacia Sin Mail 9000", email: null }, // caso SIN_MAIL
+    { id: "3303", nombre: "Farmacia Central 3303", email: "central3303@farma.com" },
+    { id: "1102", nombre: "Farmacia del Pueblo 1102", email: "pueblo1102@farma.com" },
+    { id: "4501", nombre: "Farmacia San Martín 4501", email: "sanmartin4501@farma.com" },
+    { id: "9000", nombre: "Farmacia Sin Mail 9000", email: null }, // caso SIN_MAIL
   ];
   const farmacias = [];
   for (const f of farmaciasData) {
     farmacias.push(
       await prisma.farmacia.upsert({
-        where: { nombre: f.nombre },
-        update: { email: f.email },
+        where: { id: f.id },
+        update: { nombre: f.nombre, email: f.email },
         create: f,
       }),
     );
   }
 
-  // ── Compradores y sus laboratorios ─────────────────────────
-  // Un comprador maneja N laboratorios (corrección clave del modelo).
+  // ── Compradores ────────────────────────────────────────────
   const compradoresData = [
-    {
-      email: "c1@drogueria.com",
-      nombre: "Claudio Acevedo",
-      labs: ["Bayer", "Roche"],
-    },
-    {
-      email: "s1@drogueria.com",
-      nombre: "Sandra Ibáñez",
-      labs: ["Pfizer", "Sanofi"],
-    },
+    { email: "c1@drogueria.com", nombre: "Claudio Acevedo" },
+    { email: "s1@drogueria.com", nombre: "Sandra Ibáñez" },
   ];
-
+  const compradorId: Record<string, string> = {};
   for (const c of compradoresData) {
     const user = await prisma.user.upsert({
       where: { email: c.email },
       update: { nombre: c.nombre, role: "COMPRADOR", password: hash, activo: true },
-      create: {
-        email: c.email,
-        nombre: c.nombre,
-        role: "COMPRADOR",
-        password: hash,
-      },
+      create: { email: c.email, nombre: c.nombre, role: "COMPRADOR", password: hash },
     });
-    for (const lab of c.labs) {
-      await prisma.laboratorioComprador.upsert({
-        where: { userId_laboratorio: { userId: user.id, laboratorio: lab } },
-        update: {},
-        create: { userId: user.id, laboratorio: lab },
-      });
-    }
+    compradorId[c.email] = user.id;
   }
 
   // ── Admin, operador de farmacia, precios ───────────────────
@@ -107,28 +87,47 @@ async function main() {
     },
   });
 
+  // ── Proveedores (laboratorios) y su comprador responsable ──
+  // "Genéricos SA" queda SIN comprador a propósito (camino "sinComprador").
+  const proveedoresData = [
+    { nombre: "Bayer", comprador: compradorId["c1@drogueria.com"] },
+    { nombre: "Roche", comprador: compradorId["c1@drogueria.com"] },
+    { nombre: "Pfizer", comprador: compradorId["s1@drogueria.com"] },
+    { nombre: "Sanofi", comprador: compradorId["s1@drogueria.com"] },
+    { nombre: "Genéricos SA", comprador: null as string | null },
+  ];
+  const proveedorId: Record<string, number> = {};
+  for (const p of proveedoresData) {
+    const prov = await prisma.proveedor.upsert({
+      where: { nombre: p.nombre },
+      update: { compradorId: p.comprador ?? null },
+      create: { nombre: p.nombre, compradorId: p.comprador ?? null },
+    });
+    proveedorId[p.nombre] = prov.id;
+  }
+
   // ── Artículos (maestro) ────────────────────────────────────
-  // Incluye un laboratorio SIN comprador asignado ("Genéricos SA")
-  // para ejercitar el camino "sinComprador".
   const articulos = [
-    { codigoBarra: "7791234500011", descripcion: "Aspirina 500mg x20", laboratorio: "Bayer", categoria: "Analgésicos", stockReferencia: 320 },
-    { codigoBarra: "7791234500028", descripcion: "Bepanthen Crema 30g", laboratorio: "Bayer", categoria: "Dermatología", stockReferencia: 75 },
-    { codigoBarra: "7791234500035", descripcion: "Redoxon Naranja x10", laboratorio: "Bayer", categoria: "Vitaminas", stockReferencia: 12 },
-    { codigoBarra: "7791234500042", descripcion: "Rivotral 0.5mg x30", laboratorio: "Roche", categoria: "Neurología", stockReferencia: 8 },
-    { codigoBarra: "7791234500059", descripcion: "Bactrim Forte x14", laboratorio: "Roche", categoria: "Antibióticos", stockReferencia: 140 },
-    { codigoBarra: "7791234500066", descripcion: "Lipitor 20mg x30", laboratorio: "Pfizer", categoria: "Cardiología", stockReferencia: 200 },
-    { codigoBarra: "7791234500073", descripcion: "Viagra 50mg x4", laboratorio: "Pfizer", categoria: "Urología", stockReferencia: 45 },
-    { codigoBarra: "7791234500080", descripcion: "Lyrica 75mg x14", laboratorio: "Pfizer", categoria: "Neurología", stockReferencia: 30 },
-    { codigoBarra: "7791234500097", descripcion: "Novalgina 500mg x10", laboratorio: "Sanofi", categoria: "Analgésicos", stockReferencia: 500 },
-    { codigoBarra: "7791234500103", descripcion: "Buscapina Compositum x20", laboratorio: "Sanofi", categoria: "Antiespasmódicos", stockReferencia: 90 },
-    { codigoBarra: "7791234500110", descripcion: "Paracetamol Genérico 500mg x16", laboratorio: "Genéricos SA", categoria: "Analgésicos", stockReferencia: 1000 },
-    { codigoBarra: "7791234500127", descripcion: "Ibuprofeno Genérico 400mg x20", laboratorio: "Genéricos SA", categoria: "Analgésicos", stockReferencia: 850 },
+    { codigoBarra: "7791234500011", descripcion: "Aspirina 500mg x20", laboratorio: "Bayer" },
+    { codigoBarra: "7791234500028", descripcion: "Bepanthen Crema 30g", laboratorio: "Bayer" },
+    { codigoBarra: "7791234500035", descripcion: "Redoxon Naranja x10", laboratorio: "Bayer" },
+    { codigoBarra: "7791234500042", descripcion: "Rivotral 0.5mg x30", laboratorio: "Roche" },
+    { codigoBarra: "7791234500059", descripcion: "Bactrim Forte x14", laboratorio: "Roche" },
+    { codigoBarra: "7791234500066", descripcion: "Lipitor 20mg x30", laboratorio: "Pfizer" },
+    { codigoBarra: "7791234500073", descripcion: "Viagra 50mg x4", laboratorio: "Pfizer" },
+    { codigoBarra: "7791234500080", descripcion: "Lyrica 75mg x14", laboratorio: "Pfizer" },
+    { codigoBarra: "7791234500097", descripcion: "Novalgina 500mg x10", laboratorio: "Sanofi" },
+    { codigoBarra: "7791234500103", descripcion: "Buscapina Compositum x20", laboratorio: "Sanofi" },
+    { codigoBarra: "7791234500110", descripcion: "Paracetamol Genérico 500mg x16", laboratorio: "Genéricos SA" },
+    { codigoBarra: "7791234500127", descripcion: "Ibuprofeno Genérico 400mg x20", laboratorio: "Genéricos SA" },
   ];
   for (const a of articulos) {
+    const { laboratorio, ...rest } = a;
+    const data = { ...rest, proveedorId: proveedorId[laboratorio] };
     await prisma.articulo.upsert({
       where: { codigoBarra: a.codigoBarra },
-      update: a,
-      create: a,
+      update: data,
+      create: data,
     });
   }
 

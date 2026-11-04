@@ -21,7 +21,7 @@ const EAN = "7791234500011";
 
 let adminId: string;
 let adminEmail: string;
-let farmaciaId: number;
+let farmaciaId: string;
 const solicitudIds: string[] = [];
 
 const rows = [
@@ -39,7 +39,7 @@ beforeAll(async () => {
   adminId = admin.id;
   adminEmail = admin.email;
   const f = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Colisión ${Date.now()}`, email: "colision@test.com" },
+    data: { id: `COL-${Date.now()}`, nombre: `Farmacia Colisión ${Date.now()}`, email: "colision@test.com" },
   });
   farmaciaId = f.id;
   mockAuth.mockResolvedValue({ user: { id: adminId, role: "ADMIN", email: adminEmail } } as never);

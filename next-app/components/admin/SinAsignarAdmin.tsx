@@ -22,7 +22,7 @@ type Comprador = {
   id: string;
   nombre: string;
   email: string;
-  laboratorios: { laboratorio: string }[];
+  proveedores: { nombre: string }[];
 };
 
 export function SinAsignarAdmin({
@@ -152,8 +152,8 @@ function GrupoLab({
           {compradores.map((c) => (
             <option key={c.id} value={c.id}>
               {c.nombre}
-              {c.laboratorios.length > 0
-                ? ` · ${c.laboratorios.map((l) => l.laboratorio).join(", ")}`
+              {c.proveedores.length > 0
+                ? ` · ${c.proveedores.map((p) => p.nombre).join(", ")}`
                 : ""}
             </option>
           ))}

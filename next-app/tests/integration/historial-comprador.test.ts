@@ -12,7 +12,7 @@ import { getHistoricoComprador } from "@/lib/data/comprador";
 const EAN = "7791234500011"; // Aspirina (Bayer), existe en el seed
 
 let compradorId: string;
-let farmaciaId: number;
+let farmaciaId: string;
 let solicitudId: string;
 const codigo = `SOL-HIST-${Date.now()}`;
 
@@ -20,7 +20,7 @@ beforeAll(async () => {
   const c1 = await prisma.user.findUniqueOrThrow({ where: { email: "c1@drogueria.com" } });
   compradorId = c1.id;
   const f = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Hist Comprador ${Date.now()}`, email: null },
+    data: { id: `HIST-${Date.now()}`, nombre: `Farmacia Hist Comprador ${Date.now()}`, email: null },
   });
   farmaciaId = f.id;
 

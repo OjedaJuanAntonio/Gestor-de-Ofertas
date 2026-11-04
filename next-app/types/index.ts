@@ -12,7 +12,7 @@ declare module "next-auth" {
   interface User {
     role: Role;
     nombre: string;
-    farmaciaId?: number | null;
+    farmaciaId?: string | null;
   }
   interface Session {
     user: User & { id: string };
@@ -29,8 +29,6 @@ export type ArticuloLookup = {
   codigoBarra: string;
   descripcion: string;
   laboratorio: string;
-  categoria: string | null;
-  stockReferencia: number | null;
   /** Comprador resuelto por laboratorio (puede no existir → requiere alta). */
   compradorId: string | null;
   compradorNombre: string | null;
@@ -45,7 +43,6 @@ export type ItemGrillaRow = {
   codigoBarra: string;
   descripcion: string;
   laboratorio: string;
-  categoria: string | null;
   cantidad: number | "";
   motivo: MotivoSolicitud | "";
   fechaVencimiento: string; // MM/AA

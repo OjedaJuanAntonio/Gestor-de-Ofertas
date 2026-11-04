@@ -38,7 +38,7 @@ export const authConfig: NextAuthConfig = {
           id: string;
           role?: string;
           nombre?: string;
-          farmaciaId?: number | null;
+          farmaciaId?: string | null;
           mustChangePassword?: boolean;
         };
         token.id = u.id;

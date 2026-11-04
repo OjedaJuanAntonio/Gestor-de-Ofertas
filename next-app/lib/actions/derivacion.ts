@@ -99,13 +99,17 @@ export async function reasignarItems(
         });
       }
 
-      // Regla laboratorio→comprador para que el próximo envío rutee solo.
+      // Asigna el/los proveedor(es) a este comprador para que el próximo
+      // envío rutee solo (por FK). Se crean si no existían.
       if (crearMapeo && labs.length > 0) {
-        const res = await tx.laboratorioComprador.createMany({
-          data: labs.map((laboratorio) => ({ userId: comprador.id, laboratorio })),
-          skipDuplicates: true,
-        });
-        mapeosCreados = res.count;
+        for (const nombre of labs) {
+          await tx.proveedor.upsert({
+            where: { nombre },
+            update: { compradorId: comprador.id },
+            create: { nombre, compradorId: comprador.id },
+          });
+        }
+        mapeosCreados = labs.length;
       }
     });
   } catch (e) {

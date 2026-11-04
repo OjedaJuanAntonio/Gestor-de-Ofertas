@@ -7,7 +7,7 @@ import { crearFarmacia, toggleFarmacia } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/button";
 
 type Farmacia = {
-  id: number;
+  id: string;
   nombre: string;
   email: string | null;
   activa: boolean;
@@ -16,6 +16,7 @@ type Farmacia = {
 
 export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
   const router = useRouter();
+  const [codigo, setCodigo] = useState("");
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -24,8 +25,9 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
   function crear() {
     setError(null);
     start(async () => {
-      const res = await crearFarmacia({ nombre, email });
+      const res = await crearFarmacia({ codigo, nombre, email });
       if (res.ok) {
+        setCodigo("");
         setNombre("");
         setEmail("");
         router.refresh();
@@ -33,7 +35,7 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
     });
   }
 
-  function toggle(id: number, activa: boolean) {
+  function toggle(id: string, activa: boolean) {
     start(async () => {
       await toggleFarmacia(id, activa);
       router.refresh();
@@ -43,6 +45,15 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="w-40">
+          <label className="mb-1 block text-sm font-semibold text-slate-600">Código interno</label>
+          <input
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            placeholder="F001"
+            className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+          />
+        </div>
         <div className="flex-1">
           <label className="mb-1 block text-sm font-semibold text-slate-600">Nombre</label>
           <input
@@ -61,7 +72,7 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
             className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
           />
         </div>
-        <Button onClick={crear} disabled={pending || nombre.trim().length < 2} className="h-11 gap-2 bg-blue-600 hover:bg-blue-700">
+        <Button onClick={crear} disabled={pending || codigo.trim().length < 1 || nombre.trim().length < 2} className="h-11 gap-2 bg-blue-600 hover:bg-blue-700">
           <Plus className="h-4 w-4" /> Agregar
         </Button>
       </div>
@@ -71,6 +82,7 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50 text-sm font-semibold text-slate-600">
+              <th className="px-4 py-3">Código</th>
               <th className="px-4 py-3">Nombre</th>
               <th className="px-4 py-3">Email</th>
               <th className="px-4 py-3 text-center">Solicitudes</th>
@@ -81,6 +93,7 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
           <tbody>
             {farmacias.map((f) => (
               <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50">
+                <td className="px-4 py-3 font-mono text-sm font-semibold text-slate-700">{f.id}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{f.nombre}</td>
                 <td className="px-4 py-3 text-slate-600">{f.email ?? <span className="text-slate-300">SIN_MAIL</span>}</td>
                 <td className="px-4 py-3 text-center text-slate-600">{f._count.solicitudes}</td>

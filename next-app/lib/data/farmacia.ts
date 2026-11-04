@@ -38,7 +38,7 @@ export type SolicitudesFarmaciaResult = {
  * páginas y se puede filtrar.
  */
 export async function getSolicitudesFarmacia(
-  farmaciaId: number | null,
+  farmaciaId: string | null,
   opts: {
     page?: number;
     estado?: EstadoSolicitud | null;
@@ -136,7 +136,7 @@ export type SolicitudDetalle = {
  */
 export async function getSolicitudDetalle(
   id: string,
-  farmaciaId: number | null,
+  farmaciaId: string | null,
 ): Promise<SolicitudDetalle | null> {
   const sol = await prisma.solicitud.findUnique({
     where: { id },

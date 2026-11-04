@@ -3,7 +3,7 @@ import { normalizeEan, isValidEanFormat } from "@/lib/business/ean";
 // ─────────────────────────────────────────────────────────────
 // Parser de CSV de artículos (import masivo del maestro).
 // Cabecera esperada (flexible en orden, case-insensitive):
-//   codigoBarra, descripcion, laboratorio, categoria, stock
+//   codigoBarra, descripcion, laboratorio
 // Pura y testeable: separa filas válidas de errores con su línea.
 // ─────────────────────────────────────────────────────────────
 
@@ -11,8 +11,6 @@ export type ArticuloImport = {
   codigoBarra: string;
   descripcion: string;
   laboratorio: string;
-  categoria: string | null;
-  stockReferencia: number | null;
 };
 
 export type ImportError = { linea: number; motivo: string };
@@ -31,11 +29,6 @@ const ALIASES: Record<string, keyof ArticuloImport> = {
   detalle: "descripcion",
   laboratorio: "laboratorio",
   lab: "laboratorio",
-  categoria: "categoria",
-  categoría: "categoria",
-  rubro: "categoria",
-  stock: "stockReferencia",
-  stockreferencia: "stockReferencia",
 };
 
 function splitLine(line: string, delimiter: string): string[] {
@@ -116,22 +109,8 @@ export function parseArticulosCsv(text: string): ParseResult {
       continue;
     }
 
-    const categoriaRaw = String(row.categoria ?? "").trim();
-    const stockRaw = String(row.stockReferencia ?? "").trim();
-    const stock = stockRaw === "" ? null : Number(stockRaw);
-    if (stock !== null && (!Number.isFinite(stock) || stock < 0)) {
-      errores.push({ linea, motivo: `Stock inválido: ${stockRaw}` });
-      continue;
-    }
-
     seen.add(codigoBarra);
-    validos.push({
-      codigoBarra,
-      descripcion,
-      laboratorio,
-      categoria: categoriaRaw || null,
-      stockReferencia: stock,
-    });
+    validos.push({ codigoBarra, descripcion, laboratorio });
   }
 
   return { validos, errores };

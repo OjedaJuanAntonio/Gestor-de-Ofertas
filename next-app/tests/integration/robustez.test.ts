@@ -17,8 +17,8 @@ const mockAuth = vi.mocked(auth);
 const EAN = "7791234500011"; // existe en el seed
 
 let farmaciaUserId: string;
-let farmaciaPropiaId: number;
-let farmaciaAjenaId: number;
+let farmaciaPropiaId: string;
+let farmaciaAjenaId: string;
 let adminId: string;
 const solicitudIds: string[] = [];
 
@@ -32,7 +32,7 @@ beforeAll(async () => {
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@drogueria.com" } });
   adminId = admin.id;
   const ajena = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Ajena ${Date.now()}`, email: null },
+    data: { id: `AJENA-${Date.now()}`, nombre: `Farmacia Ajena ${Date.now()}`, email: null },
   });
   farmaciaAjenaId = ajena.id;
 });

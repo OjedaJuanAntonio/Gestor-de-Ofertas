@@ -18,6 +18,8 @@ const mockAuth = vi.mocked(auth);
 const USER_EMAIL = "reset-test@drogueria.com";
 const FARM_A = "ZZ Test Farmacia A";
 const FARM_B = "ZZ Test Farmacia B";
+const COD_A = "ZZ-TEST-A";
+const COD_B = "ZZ-TEST-B";
 let userId: string;
 
 beforeAll(async () => {
@@ -35,12 +37,12 @@ beforeAll(async () => {
   });
   userId = u.id;
 
-  await prisma.farmacia.deleteMany({ where: { nombre: { in: [FARM_A, FARM_B] } } });
+  await prisma.farmacia.deleteMany({ where: { id: { in: [COD_A, COD_B] } } });
 });
 
 afterAll(async () => {
   await prisma.user.deleteMany({ where: { email: USER_EMAIL } });
-  await prisma.farmacia.deleteMany({ where: { nombre: { in: [FARM_A, FARM_B] } } });
+  await prisma.farmacia.deleteMany({ where: { id: { in: [COD_A, COD_B] } } });
   await prisma.$disconnect();
 });
 
@@ -60,7 +62,7 @@ describe("resetearPassword (integración)", () => {
 
 describe("importarFarmacias (integración)", () => {
   it("crea farmacias nuevas y omite duplicados al re-importar", async () => {
-    const csv = `nombre,email\n${FARM_A},a@farma.com\n${FARM_B},\n`;
+    const csv = `codigo,nombre,email\n${COD_A},${FARM_A},a@farma.com\n${COD_B},${FARM_B},\n`;
 
     const res1 = await importarFarmacias(csv);
     expect(res1.ok).toBe(true);
@@ -68,7 +70,7 @@ describe("importarFarmacias (integración)", () => {
     expect(res1.importados).toBe(2);
     expect(res1.omitidos).toBe(0);
 
-    const count = await prisma.farmacia.count({ where: { nombre: { in: [FARM_A, FARM_B] } } });
+    const count = await prisma.farmacia.count({ where: { id: { in: [COD_A, COD_B] } } });
     expect(count).toBe(2);
 
     const res2 = await importarFarmacias(csv);

@@ -7,9 +7,9 @@ import { parseArticulosCsv } from "@/lib/import/articulos-csv";
 import { importarArticulos, type ImportResult } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/button";
 
-const EJEMPLO = `codigoBarra,descripcion,laboratorio,categoria,stock
-7791234599999,Ibuprofeno 600mg x10,Genéricos SA,Analgésicos,120
-7791234599998,Amoxicilina 500mg x16,Roche,Antibióticos,60`;
+const EJEMPLO = `codigoBarra,descripcion,laboratorio
+7791234599999,Ibuprofeno 600mg x10,Genéricos SA
+7791234599998,Amoxicilina 500mg x16,Roche`;
 
 export function ImportArticulos() {
   const router = useRouter();
@@ -57,7 +57,7 @@ export function ImportArticulos() {
           className="w-full rounded-lg border border-slate-300 p-3 font-mono text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
         />
         <p className="mt-2 text-xs text-slate-400">
-          Columnas: codigoBarra, descripcion, laboratorio, categoria (opc.), stock (opc.). Acepta `;` o `,` y alias (EAN, lab, rubro).
+          Columnas: codigoBarra, descripcion, laboratorio. El laboratorio se usa como proveedor. Acepta `;` o `,` y alias (EAN, lab).
         </p>
       </div>
 

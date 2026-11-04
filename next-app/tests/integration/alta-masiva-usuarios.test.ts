@@ -32,7 +32,12 @@ beforeAll(async () => {
   const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@drogueria.com" } });
   mockAuth.mockResolvedValue({ user: { id: admin.id, role: "ADMIN", email: admin.email } } as never);
   await limpiar();
-  await prisma.farmacia.createMany({ data: [{ nombre: FARM_A }, { nombre: FARM_B }] });
+  await prisma.farmacia.createMany({
+    data: [
+      { id: `ALTA-A-${Date.now()}`, nombre: FARM_A },
+      { id: `ALTA-B-${Date.now()}`, nombre: FARM_B },
+    ],
+  });
 });
 
 afterAll(async () => {

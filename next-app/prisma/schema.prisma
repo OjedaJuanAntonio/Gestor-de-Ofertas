@@ -74,7 +74,9 @@ enum EmailEstado {
 // ─────────────────────────────────────────────
 
 model Farmacia {
-  id        Int      @id @default(autoincrement())
+  // El id ES el código interno de la farmacia (lo carga el usuario), no un
+  // autoincremental. Texto: admite códigos alfanuméricos y ceros a la izquierda.
+  id        String   @id
   nombre    String   @unique
   email     String? // Puede no tener mail → null = SIN_MAIL
   activa    Boolean  @default(true)
@@ -107,11 +109,11 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Vínculo usuario↔farmacia (operador asignado a una farmacia).
-  farmaciaId Int?
+  farmaciaId String?
   farmacia   Farmacia? @relation(fields: [farmaciaId], references: [id])
 
-  // Un comprador maneja N laboratorios (muchos-a-muchos vía tabla puente).
-  laboratorios LaboratorioComprador[]
+  // Un comprador es responsable de N proveedores (laboratorios).
+  proveedores Proveedor[] @relation("compradorProveedores")
 
   itemsAsignados     ItemSolicitud[] @relation("compradorItems")
   itemsAprobados     ItemSolicitud[] @relation("aprobadorItems")
@@ -123,19 +125,31 @@ model User {
 }
 
 // ─────────────────────────────────────────────
-// LABORATORIO → COMPRADOR (un comprador maneja N labs)
+// PROVEEDOR (laboratorio)
+// Antes el laboratorio era un texto repetido en Articulo y en la
+// asignación del comprador. Ahora es una entidad propia con FK:
+//   - cada Articulo apunta a un Proveedor (proveedorId)
+//   - cada Proveedor tiene 0 o 1 comprador responsable
+// El ruteo de una solicitud deja de depender de que los nombres
+// coincidan: va por clave foránea.
 // ─────────────────────────────────────────────
 
-model LaboratorioComprador {
-  id          Int    @id @default(autoincrement())
-  laboratorio String
+model Proveedor {
+  id        Int      @id @default(autoincrement())
+  nombre    String   @unique
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Comprador responsable (0 o 1). Un comprador maneja N proveedores.
+  compradorId String?
+  comprador   User?   @relation("compradorProveedores", fields: [compradorId], references: [id])
 
-  @@unique([userId, laboratorio])
-  @@index([laboratorio]) // Resolver comprador por laboratorio en el lookup
-  @@map("laboratorio_comprador")
+  articulos Articulo[]
+
+  @@index([compradorId])
+  @@index([activo])
+  @@map("proveedores")
 }
 
 // ─────────────────────────────────────────────
@@ -143,17 +157,18 @@ model LaboratorioComprador {
 // ─────────────────────────────────────────────
 
 model Articulo {
-  codigoBarra     String   @id // EAN normalizado
-  descripcion     String
-  laboratorio     String
-  categoria       String?
-  stockReferencia Int?     @default(0) // Stock central de referencia
-  activo          Boolean  @default(true)
-  updatedAt       DateTime @updatedAt
+  codigoBarra String   @id // EAN normalizado
+  descripcion String
+  activo      Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+
+  // Proveedor (laboratorio) por clave foránea.
+  proveedorId Int
+  proveedor   Proveedor @relation(fields: [proveedorId], references: [id])
 
   items ItemSolicitud[]
 
-  @@index([laboratorio])
+  @@index([proveedorId])
   @@index([descripcion])
   @@map("articulos")
 }
@@ -168,7 +183,7 @@ model Solicitud {
   fechaEnvio DateTime        @default(now())
   estado     EstadoSolicitud @default(PENDIENTE)
 
-  farmaciaId Int
+  farmaciaId String
   farmacia   Farmacia @relation(fields: [farmaciaId], references: [id])
 
   // Snapshots históricos (trazabilidad si el maestro cambia después).

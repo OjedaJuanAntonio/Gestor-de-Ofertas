@@ -59,45 +59,36 @@ export async function lookupArticulosBatch(
   }
   if (faltantes.length === 0) return out;
 
-  // 2) Un solo findMany al maestro por todos los faltantes.
+  // 2) Un solo findMany al maestro por todos los faltantes, trayendo el
+  //    proveedor y su comprador responsable por clave foránea (sin segunda
+  //    query ni coincidencia de texto).
   const articulos = await prisma.articulo.findMany({
     where: { codigoBarra: { in: faltantes }, activo: true },
     select: {
       codigoBarra: true,
       descripcion: true,
-      laboratorio: true,
-      categoria: true,
-      stockReferencia: true,
+      proveedor: {
+        select: {
+          nombre: true,
+          comprador: {
+            select: { id: true, nombre: true, email: true, activo: true, role: true },
+          },
+        },
+      },
     },
   });
 
-  // 3) Un solo findMany por los compradores de los laboratorios involucrados.
-  //    Un laboratorio tiene a lo sumo un responsable → nos quedamos con el primero.
-  const laboratorios = [...new Set(articulos.map((a) => a.laboratorio))];
-  const compradorPorLab = new Map<string, { id: string; nombre: string; email: string }>();
-  if (laboratorios.length > 0) {
-    const filas = await prisma.laboratorioComprador.findMany({
-      where: {
-        laboratorio: { in: laboratorios },
-        user: { activo: true, role: "COMPRADOR" },
-      },
-      select: { laboratorio: true, user: { select: { id: true, nombre: true, email: true } } },
-    });
-    for (const f of filas) {
-      if (!compradorPorLab.has(f.laboratorio)) compradorPorLab.set(f.laboratorio, f.user);
-    }
-  }
-
-  // 4) Armar resultados + poblar la caché.
+  // 3) Armar resultados + poblar la caché.
   const encontrados = new Set<string>();
   for (const a of articulos) {
-    const comprador = compradorPorLab.get(a.laboratorio) ?? null;
+    const c = a.proveedor.comprador;
+    // El responsable vale solo si sigue activo y con rol comprador.
+    const comprador = c && c.activo && c.role === "COMPRADOR" ? c : null;
     const result: ArticuloLookup = {
       codigoBarra: a.codigoBarra,
       descripcion: a.descripcion,
-      laboratorio: a.laboratorio,
-      categoria: a.categoria,
-      stockReferencia: a.stockReferencia,
+      // El DTO mantiene "laboratorio" = nombre del proveedor (no cambia la UI).
+      laboratorio: a.proveedor.nombre,
       compradorId: comprador?.id ?? null,
       compradorNombre: comprador?.nombre ?? null,
       compradorMail: comprador?.email ?? null,

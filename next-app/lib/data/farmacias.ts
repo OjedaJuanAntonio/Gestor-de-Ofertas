@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 
 export type FarmaciaOption = {
-  id: number;
+  id: string; // el id es el código interno de la farmacia
   nombre: string;
   email: string | null;
 };

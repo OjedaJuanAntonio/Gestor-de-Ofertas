@@ -9,13 +9,13 @@ import { getHistoricoPrecios } from "@/lib/data/precios";
 
 const EAN = "7791234500011";
 
-let farmaciaId: number;
+let farmaciaId: string;
 let solicitudId: string;
 const codigo = `SOL-HPREC-${Date.now()}`;
 
 beforeAll(async () => {
   const f = await prisma.farmacia.create({
-    data: { nombre: `Farmacia Hist Precios ${Date.now()}`, email: null },
+    data: { id: `HPREC-${Date.now()}`, nombre: `Farmacia Hist Precios ${Date.now()}`, email: null },
   });
   farmaciaId = f.id;
   const sol = await prisma.solicitud.create({

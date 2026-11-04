@@ -15,9 +15,9 @@ type Usuario = {
   role: Role;
   activo: boolean;
   farmacia: { nombre: string } | null;
-  laboratorios: { laboratorio: string }[];
+  proveedores: { nombre: string }[];
 };
-type FarmaciaOpt = { id: number; nombre: string };
+type FarmaciaOpt = { id: string; nombre: string };
 
 const ROLES: Role[] = ["ADMIN", "FARMACIA", "COMPRADOR", "PRECIOS"];
 
@@ -34,7 +34,7 @@ export function UsuariosAdmin({
     nombre: "",
     password: "",
     role: "COMPRADOR" as Role,
-    farmaciaId: "" as number | "",
+    farmaciaId: "" as string,
     laboratorios: "",
   });
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +78,7 @@ export function UsuariosAdmin({
         nombre: form.nombre,
         password: form.password,
         role: form.role,
-        farmaciaId: form.role === "FARMACIA" && form.farmaciaId ? Number(form.farmaciaId) : null,
+        farmaciaId: form.role === "FARMACIA" && form.farmaciaId ? form.farmaciaId : null,
         laboratorios:
           form.role === "COMPRADOR"
             ? form.laboratorios.split(",").map((l) => l.trim()).filter(Boolean)
@@ -108,7 +108,7 @@ export function UsuariosAdmin({
             ))}
           </select>
           {form.role === "FARMACIA" && (
-            <select className={inputCls} value={form.farmaciaId} onChange={(e) => setForm({ ...form, farmaciaId: e.target.value ? Number(e.target.value) : "" })}>
+            <select className={inputCls} value={form.farmaciaId} onChange={(e) => setForm({ ...form, farmaciaId: e.target.value })}>
               <option value="">— Farmacia asignada —</option>
               {farmacias.map((f) => (
                 <option key={f.id} value={f.id}>{f.nombre}</option>
@@ -150,7 +150,7 @@ export function UsuariosAdmin({
                 </td>
                 <td className="px-4 py-3 text-sm text-slate-600">
                   {u.role === "FARMACIA" && (u.farmacia?.nombre ?? "—")}
-                  {u.role === "COMPRADOR" && (u.laboratorios.map((l) => l.laboratorio).join(", ") || "—")}
+                  {u.role === "COMPRADOR" && (u.proveedores.map((p) => p.nombre).join(", ") || "—")}
                   {(u.role === "ADMIN" || u.role === "PRECIOS") && "—"}
                 </td>
                 <td className="px-4 py-3 text-center">

@@ -7,9 +7,9 @@ import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
 import { importarFarmacias, type ImportFarmaciasResult } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/button";
 
-const EJEMPLO = `nombre,email
-Farmacia Central 3303,central3303@farma.com
-Farmacia del Pueblo 1102,`;
+const EJEMPLO = `codigo,nombre,email
+3303,Farmacia Central 3303,central3303@farma.com
+1102,Farmacia del Pueblo 1102,`;
 
 export function ImportFarmacias() {
   const router = useRouter();
@@ -57,7 +57,7 @@ export function ImportFarmacias() {
           className="w-full rounded-lg border border-slate-300 p-3 font-mono text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
         />
         <p className="mt-2 text-xs text-slate-400">
-          Columnas: nombre (obligatorio), email (opcional). Acepta `;` o `,` y alias (farmacia, mail, correo).
+          Columnas: codigo (obligatorio, es el ID interno), nombre (obligatorio), email (opcional). Acepta `;` o `,` y alias (id, farmacia, mail, correo).
           Las farmacias con nombre ya existente se omiten.
         </p>
       </div>
