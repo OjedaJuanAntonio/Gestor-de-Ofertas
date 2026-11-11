@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { crearUsuario, toggleUsuario, resetearPassword, resetearAClaveTemporal } from "@/lib/actions/admin";
-import { CLAVE_TEMPORAL } from "@/lib/password";
+import { DIAS_VIGENCIA_CLAVE_TEMPORAL } from "@/lib/password";
 import type { Role } from "@/types";
 import { Button } from "@/components/ui/button";
 
@@ -44,6 +44,16 @@ export function UsuariosAdmin({
   const [resetError, setResetError] = useState<string | null>(null);
   const [tempUser, setTempUser] = useState<{ id: string; nombre: string } | null>(null);
   const [tempError, setTempError] = useState<string | null>(null);
+  // Clave recién generada: se muestra una sola vez, hasta cerrar el diálogo.
+  const [tempClave, setTempClave] = useState<string | null>(null);
+  const [copiada, setCopiada] = useState(false);
+
+  function cerrarTemp() {
+    setTempUser(null);
+    setTempClave(null);
+    setTempError(null);
+    setCopiada(false);
+  }
 
   function hacerResetTemporal() {
     if (!tempUser) return;
@@ -51,7 +61,7 @@ export function UsuariosAdmin({
     start(async () => {
       const res = await resetearAClaveTemporal(tempUser.id);
       if (res.ok) {
-        setTempUser(null);
+        setTempClave(res.clave);
         router.refresh();
       } else setTempError(res.error);
     });
@@ -160,7 +170,7 @@ export function UsuariosAdmin({
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <button
-                    onClick={() => { setTempUser({ id: u.id, nombre: u.nombre }); setTempError(null); }}
+                    onClick={() => { cerrarTemp(); setTempUser({ id: u.id, nombre: u.nombre }); }}
                     className="mr-4 text-sm font-semibold text-slate-600 hover:underline"
                   >
                     Clave temporal
@@ -190,7 +200,8 @@ export function UsuariosAdmin({
           >
             <h2 className="text-xl font-bold text-slate-800">Resetear contraseña</h2>
             <p className="mt-1 text-sm text-slate-600">
-              Nueva contraseña para <strong>{resetUser.nombre}</strong> (mín. 10 caracteres).
+              Nueva contraseña para <strong>{resetUser.nombre}</strong> (mín. 10 caracteres). Se le
+              va a pedir que la cambie al entrar.
             </p>
             <input
               type="password"
@@ -220,28 +231,64 @@ export function UsuariosAdmin({
       {tempUser && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setTempUser(null)}
+          onClick={tempClave ? undefined : cerrarTemp}
         >
           <div
             className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-xl font-bold text-slate-800">Resetear a clave temporal</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              A <strong>{tempUser.nombre}</strong> se le va a asignar la clave temporal{" "}
-              <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-slate-800">{CLAVE_TEMPORAL}</code>{" "}
-              y se le pedirá cambiarla al iniciar sesión. Comunicásela a la farmacia (es genérica,
-              no debe ser la personal).
-            </p>
-            {tempError && <p className="mt-2 text-sm font-semibold text-red-600">{tempError}</p>}
-            <div className="mt-5 flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setTempUser(null)}>
-                Cancelar
-              </Button>
-              <Button className="bg-blue-600 hover:bg-blue-700" onClick={hacerResetTemporal} disabled={pending}>
-                Asignar clave temporal
-              </Button>
-            </div>
+            {tempClave ? (
+              <>
+                <h2 className="text-xl font-bold text-slate-800">Clave temporal generada</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Pasale esta clave a <strong>{tempUser.nombre}</strong>. Al entrar se le va a pedir
+                  que elija la suya. Vence en {DIAS_VIGENCIA_CLAVE_TEMPORAL} días.
+                </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <code
+                    data-testid="clave-temporal"
+                    className="flex-1 select-all rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-center font-mono text-xl tracking-widest text-slate-900"
+                  >
+                    {tempClave}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void navigator.clipboard?.writeText(tempClave);
+                      setCopiada(true);
+                    }}
+                  >
+                    {copiada ? "Copiada" : "Copiar"}
+                  </Button>
+                </div>
+                <p className="mt-3 text-sm font-semibold text-amber-700">
+                  Anotala ahora: no se guarda y no se puede volver a ver.
+                </p>
+                <div className="mt-5 flex justify-end">
+                  <Button className="bg-blue-600 hover:bg-blue-700" onClick={cerrarTemp}>
+                    Listo
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-slate-800">Generar clave temporal</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  A <strong>{tempUser.nombre}</strong> se le va a generar una clave temporal al azar
+                  (reemplaza la contraseña que tenga) y se le pedirá cambiarla al iniciar sesión.
+                  Sus sesiones abiertas se cierran.
+                </p>
+                {tempError && <p className="mt-2 text-sm font-semibold text-red-600">{tempError}</p>}
+                <div className="mt-5 flex justify-end gap-3">
+                  <Button variant="ghost" onClick={cerrarTemp}>
+                    Cancelar
+                  </Button>
+                  <Button className="bg-blue-600 hover:bg-blue-700" onClick={hacerResetTemporal} disabled={pending}>
+                    Generar clave temporal
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

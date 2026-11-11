@@ -52,6 +52,9 @@ describe("resetearPassword (integración)", () => {
     expect(res.ok).toBe(true);
     const u = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
     expect(await bcrypt.compare("passwordNueva123", u.password)).toBe(true);
+    // La clave la eligió el admin: el usuario debe cambiarla al entrar.
+    expect(u.mustChangePassword).toBe(true);
+    expect(u.claveTemporalVence).not.toBeNull();
   });
 
   it("rechaza contraseñas cortas (< 10)", async () => {

@@ -7,7 +7,6 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { importarUsuariosFarmacia, resetearAClaveTemporal } from "@/lib/actions/admin";
-import { CLAVE_TEMPORAL } from "@/lib/password";
 
 const mockAuth = vi.mocked(auth);
 
@@ -66,7 +65,17 @@ ZZ No Existe,fantasma@farma.test`;
     expect(uA.role).toBe("FARMACIA");
     expect(uA.mustChangePassword).toBe(true);
     expect(uA.farmacia?.nombre).toBe(FARM_A);
-    expect(await bcrypt.compare(CLAVE_TEMPORAL, uA.password)).toBe(true);
+
+    // Cada alta recibe SU clave (aleatoria, distinta) y solo se devuelve acá.
+    expect(res.credenciales.map((c) => c.email).sort()).toEqual([EMAIL_A, EMAIL_B].sort());
+    const cA = res.credenciales.find((c) => c.email === EMAIL_A)!;
+    const cB = res.credenciales.find((c) => c.email === EMAIL_B)!;
+    expect(cA.clave).toMatch(/^[a-z2-9]{10}$/);
+    expect(cA.clave).not.toBe(cB.clave);
+    expect(await bcrypt.compare(cA.clave, uA.password)).toBe(true);
+    expect(await bcrypt.compare("123456", uA.password)).toBe(false);
+    // Y vence: no queda una cuenta abierta para siempre.
+    expect(uA.claveTemporalVence!.getTime()).toBeGreaterThan(Date.now());
   });
 
   it("omite emails ya existentes al re-importar (idempotente)", async () => {
@@ -76,6 +85,8 @@ ZZ No Existe,fantasma@farma.test`;
     if (!res.ok) return;
     expect(res.importados).toBe(0);
     expect(res.omitidos).toBe(2);
+    // A quien ya existía no se le genera (ni se le pisa) ninguna clave.
+    expect(res.credenciales).toHaveLength(0);
   });
 
   it("matchea la farmacia aunque difiera la capitalización", async () => {
@@ -89,7 +100,7 @@ ZZ No Existe,fantasma@farma.test`;
 });
 
 describe("resetearAClaveTemporal", () => {
-  it("deja la clave temporal y fuerza el cambio", async () => {
+  it("genera una clave temporal aleatoria con vencimiento y fuerza el cambio", async () => {
     // El usuario EMAIL_RESET fue creado en el test anterior; lo normalizamos
     // a una contraseña propia y sin flag, para probar el reseteo.
     const u0 = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL_RESET } });
@@ -100,9 +111,16 @@ describe("resetearAClaveTemporal", () => {
 
     const res = await resetearAClaveTemporal(u0.id);
     expect(res.ok).toBe(true);
+    if (!res.ok) return;
 
     const u = await prisma.user.findUniqueOrThrow({ where: { id: u0.id } });
     expect(u.mustChangePassword).toBe(true);
-    expect(await bcrypt.compare(CLAVE_TEMPORAL, u.password)).toBe(true);
+    expect(await bcrypt.compare(res.clave, u.password)).toBe(true);
+    expect(await bcrypt.compare("claveLargaPropia1", u.password)).toBe(false);
+    expect(u.claveTemporalVence!.getTime()).toBeGreaterThan(Date.now());
+
+    // Dos reseteos nunca dan la misma clave.
+    const res2 = await resetearAClaveTemporal(u0.id);
+    expect(res2.ok && res2.clave !== res.clave).toBe(true);
   });
 });

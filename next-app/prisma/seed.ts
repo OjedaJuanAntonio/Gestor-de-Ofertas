@@ -5,6 +5,10 @@ loadEnv({ path: ".env" });
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
+import { exigirBaseLocal } from "./guard-entorno";
+
+// Usuarios demo con contraseña pública: solo contra una base local.
+exigirBaseLocal("prisma/seed.ts");
 
 // ─────────────────────────────────────────────────────────────
 // Seed de desarrollo: maestros + usuarios + solicitudes demo.

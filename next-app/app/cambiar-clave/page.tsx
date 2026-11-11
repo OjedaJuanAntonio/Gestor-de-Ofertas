@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { CambiarClaveForm } from "@/components/CambiarClaveForm";
@@ -20,7 +21,14 @@ export default async function CambiarClavePage() {
               : "Elegí una contraseña nueva."}
           </p>
         </div>
-        <CambiarClaveForm />
+        <CambiarClaveForm pedirActual={!u.mustChangePassword} />
+        {!u.mustChangePassword && (
+          <p className="text-center text-sm">
+            <Link href="/" className="font-medium text-blue-600 hover:underline">
+              Volver sin cambiarla
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

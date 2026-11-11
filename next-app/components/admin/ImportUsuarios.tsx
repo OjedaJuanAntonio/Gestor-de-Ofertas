@@ -2,15 +2,39 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Upload, FileUp, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Upload, FileUp, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
-import { importarUsuariosFarmacia, type ImportUsuariosResult } from "@/lib/actions/admin";
-import { CLAVE_TEMPORAL } from "@/lib/password";
+import {
+  importarUsuariosFarmacia,
+  type CredencialNueva,
+  type ImportUsuariosResult,
+} from "@/lib/actions/admin";
+import { toCsv } from "@/lib/export/csv";
+import { DIAS_VIGENCIA_CLAVE_TEMPORAL } from "@/lib/password";
 import { Button } from "@/components/ui/button";
 
 const EJEMPLO = `farmacia,email
 Farmacia Central 3303,central3303@farma.com
 Farmacia del Pueblo 1102,pueblo1102@farma.com`;
+
+/** Baja un CSV (para Excel) con farmacia, email y clave temporal de cada alta. */
+function descargarClaves(credenciales: CredencialNueva[]) {
+  const csv = toCsv<CredencialNueva>(
+    credenciales,
+    [
+      { header: "Farmacia", value: (c) => c.farmacia },
+      { header: "Email", value: (c) => c.email },
+      { header: "Clave temporal", value: (c) => c.clave },
+    ],
+    { bom: true },
+  );
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `claves-temporales-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ImportUsuarios() {
   const router = useRouter();
@@ -61,9 +85,9 @@ export function ImportUsuarios() {
         />
         <p className="mt-2 text-xs text-slate-400">
           Columnas: farmacia y email (obligatorias), nombre (opcional). La farmacia debe existir ya
-          (importala primero). Cada usuario se crea con rol FARMACIA y la clave temporal{" "}
-          <code className="rounded bg-slate-100 px-1 font-mono">{CLAVE_TEMPORAL}</code>; se le pedirá
-          cambiarla al entrar. Los emails ya existentes se omiten.
+          (importala primero). Cada usuario se crea con rol FARMACIA y una clave temporal propia,
+          generada al azar, que vence a los {DIAS_VIGENCIA_CLAVE_TEMPORAL} días; al terminar vas a
+          poder descargar el listado de claves. Los emails ya existentes se omiten.
         </p>
       </div>
 
@@ -104,6 +128,24 @@ export function ImportUsuarios() {
               ? `Importados ${resultado.importados} usuario(s)${resultado.omitidos ? ` · ${resultado.omitidos} omitidos (email ya existía)` : ""}.`
               : resultado.error}
           </div>
+          {resultado.ok && resultado.credenciales.length > 0 && (
+            <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              <p className="font-semibold">
+                Descargá ahora las claves temporales: no se guardan y no se pueden volver a ver.
+              </p>
+              <p className="mt-1">
+                Cada farmacia tiene una clave distinta, válida por {DIAS_VIGENCIA_CLAVE_TEMPORAL} días.
+                Al entrar se le pide elegir la suya. Si perdés el archivo, generá una nueva desde
+                la tabla de usuarios (&quot;Clave temporal&quot;).
+              </p>
+              <Button
+                onClick={() => descargarClaves(resultado.credenciales)}
+                className="mt-3 gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                <Download className="h-4 w-4" /> Descargar claves ({resultado.credenciales.length})
+              </Button>
+            </div>
+          )}
           {resultado.ok && resultado.noEncontradas.length > 0 && (
             <p className="mt-2 text-sm text-amber-700">
               Farmacias no encontradas (impórtalas primero): {resultado.noEncontradas.join(", ")}

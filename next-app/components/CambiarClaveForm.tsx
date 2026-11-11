@@ -6,7 +6,8 @@ import { cambiarMiPassword } from "@/lib/actions/cuenta";
 import { MIN_PASSWORD_CAMBIO } from "@/lib/password";
 import { Button } from "@/components/ui/button";
 
-export function CambiarClaveForm() {
+export function CambiarClaveForm({ pedirActual = false }: { pedirActual?: boolean }) {
+  const [actual, setActual] = useState("");
   const [password, setPassword] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +16,10 @@ export function CambiarClaveForm() {
   function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (pedirActual && !actual) {
+      setError("Ingresá tu contraseña actual.");
+      return;
+    }
     if (password.length < MIN_PASSWORD_CAMBIO) {
       setError(`La contraseña debe tener al menos ${MIN_PASSWORD_CAMBIO} caracteres.`);
       return;
@@ -25,7 +30,7 @@ export function CambiarClaveForm() {
     }
     start(async () => {
       // Si sale bien, la Server Action cierra sesión y redirige al login.
-      const res = await cambiarMiPassword({ password });
+      const res = await cambiarMiPassword({ password, actual: pedirActual ? actual : undefined });
       if (!res.ok) setError(res.error);
     });
   }
@@ -35,6 +40,22 @@ export function CambiarClaveForm() {
 
   return (
     <form onSubmit={submit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      {pedirActual && (
+        <div className="space-y-1.5">
+          <label htmlFor="actual" className="text-sm font-medium text-slate-700">
+            Contraseña actual
+          </label>
+          <input
+            id="actual"
+            type="password"
+            autoFocus
+            autoComplete="current-password"
+            value={actual}
+            onChange={(e) => setActual(e.target.value)}
+            className={inputCls}
+          />
+        </div>
+      )}
       <div className="space-y-1.5">
         <label htmlFor="nueva" className="text-sm font-medium text-slate-700">
           Nueva contraseña
@@ -42,7 +63,7 @@ export function CambiarClaveForm() {
         <input
           id="nueva"
           type="password"
-          autoFocus
+          autoFocus={!pedirActual}
           autoComplete="new-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}

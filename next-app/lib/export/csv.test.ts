@@ -31,6 +31,21 @@ describe("toCsv", () => {
     expect(toCsv([], cols)).toBe("Nombre;Cantidad;Nota");
   });
 
+  it("neutraliza textos que Excel tomaría como fórmula; los números no", () => {
+    const csv = toCsv(
+      [
+        { nombre: "=HYPERLINK(\"http://x\")", cantidad: -5, nota: "+54 11" },
+        { nombre: "@cmd", cantidad: 1, nota: "-ojo" },
+      ],
+      cols,
+    );
+    const [, f1, f2] = csv.split("\n");
+    expect(f1.startsWith(`"'=HYPERLINK`)).toBe(true);
+    expect(f1).toContain(";-5;"); // número negativo intacto
+    expect(f1.endsWith("'+54 11")).toBe(true);
+    expect(f2).toBe("'@cmd;1;'-ojo");
+  });
+
   it("agrega BOM si se pide", () => {
     expect(toCsv([], cols, { bom: true }).startsWith("﻿")).toBe(true);
   });

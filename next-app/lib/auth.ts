@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import { CredentialsSignin } from "next-auth";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "@/auth.config";
@@ -8,6 +9,7 @@ import {
   loginBloqueado,
   registrarFallo,
   limpiarIntentos,
+  ipDeRequest,
 } from "@/lib/login-throttle";
 import { huellaPassword, revalidarToken } from "@/lib/session-check";
 
@@ -15,6 +17,19 @@ import { huellaPassword, revalidarToken } from "@/lib/session-check";
 // lib/auth.ts — Configuración completa de NextAuth
 // Solo corre en Node.js runtime (nunca en Edge).
 // ─────────────────────────────────────────────────────────────
+
+// Errores de login con un código que la pantalla sabe explicar. El resto de
+// los fallos devuelve null → mensaje genérico ("email o contraseña incorrectos").
+class LoginBloqueado extends CredentialsSignin {
+  code = "bloqueado";
+}
+class ClaveTemporalVencida extends CredentialsSignin {
+  code = "clave_vencida";
+}
+
+// Hash válido contra el que se compara cuando el email no existe, para que la
+// respuesta tarde lo mismo exista o no el usuario (no delata qué mails hay).
+const HASH_SENUELO = "$2b$10$ks3IUlxYKIAfUC9cyn1bsuo20e.mV.nhGsvUAgH1//6D/bezEd.OS";
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -45,15 +60,17 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         password: { label: "Contraseña", type: "password" },
       },
 
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         const parsed = loginSchema.safeParse(credentials);
         if (!parsed.success) return null;
 
         const { password } = parsed.data;
         const email = parsed.data.email.trim().toLowerCase();
 
-        // Freno a fuerza bruta: bloquea tras demasiados intentos fallidos.
-        if (loginBloqueado(email)) return null;
+        const ip = ipDeRequest(request);
+
+        // Freno a fuerza bruta: por email+IP, por IP y por email.
+        if (await loginBloqueado(email, ip)) throw new LoginBloqueado();
 
         const user = await prisma.user.findUnique({
           where: { email },
@@ -66,21 +83,32 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
             activo: true,
             farmaciaId: true,
             mustChangePassword: true,
+            claveTemporalVence: true,
           },
         });
 
         if (!user || !user.activo) {
-          registrarFallo(email);
+          await bcrypt.compare(password, HASH_SENUELO);
+          await registrarFallo(email, ip);
           return null;
         }
 
         const passwordMatch = await bcrypt.compare(password, user.password);
         if (!passwordMatch) {
-          registrarFallo(email);
+          await registrarFallo(email, ip);
           return null;
         }
 
-        limpiarIntentos(email);
+        // Clave temporal vencida: es la correcta, pero ya no sirve.
+        if (
+          user.mustChangePassword &&
+          user.claveTemporalVence &&
+          user.claveTemporalVence <= new Date()
+        ) {
+          throw new ClaveTemporalVencida();
+        }
+
+        await limpiarIntentos(email, ip);
         return {
           id: user.id,
           email: user.email,
