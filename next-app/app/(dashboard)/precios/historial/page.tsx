@@ -1,6 +1,7 @@
 import { History, Search } from "lucide-react";
 import { getHistoricoPrecios } from "@/lib/data/precios";
 import { SortableTh } from "@/components/historial/SortableTh";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Historial de carga · Precios" };
 
@@ -52,6 +53,7 @@ export default async function HistorialPreciosPage({
     dir?: string;
   }>;
 }) {
+  await requireRole("ADMIN", "PRECIOS");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const q = (sp.q ?? "").trim();

@@ -1,10 +1,12 @@
 import { UserX } from "lucide-react";
 import { listItemsSinComprador, listCompradoresOptions } from "@/lib/data/admin";
 import { SinAsignarAdmin } from "@/components/admin/SinAsignarAdmin";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Sin asignar · Admin" };
 
 export default async function SinAsignarPage() {
+  await requireRole("ADMIN");
   const [items, compradores] = await Promise.all([
     listItemsSinComprador(),
     listCompradoresOptions(),

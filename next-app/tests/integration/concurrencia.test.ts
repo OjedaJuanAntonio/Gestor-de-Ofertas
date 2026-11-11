@@ -146,7 +146,7 @@ describe("concurrencia", () => {
     expect(audits).toBe(1);
   });
 
-  it("confirmarCargasERP sobre el mismo ítem: no duplica el correo consolidado", async () => {
+  it("confirmarCargasERP sobre el mismo ítem: gana exactamente una y no duplica el correo", async () => {
     mockAuth.mockResolvedValue({ user: { id: preciosId, role: "PRECIOS", email: "precios@drogueria.com" } } as never);
     const { solId, itemId } = await crearSolicitudConItem("APROBADO", { condicion: "50%" });
 
@@ -154,10 +154,15 @@ describe("concurrencia", () => {
       Array.from({ length: N }, () => confirmarCargasERP({ itemIds: [itemId] })),
     );
 
-    // Al menos una confirma; ninguna lanza excepción no controlada.
-    expect(results.some((r) => r.ok)).toBe(true);
+    // Gana exactamente una (guarda anti-carrera); ninguna lanza excepción.
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
     const item = await prisma.itemSolicitud.findUniqueOrThrow({ where: { id: itemId } });
     expect(item.cargadoERP).toBe(true);
+    // Un solo registro de auditoría CARGAR_ERP (antes se duplicaba).
+    const audits = await prisma.auditLog.count({
+      where: { entityId: itemId, action: "CARGAR_ERP" },
+    });
+    expect(audits).toBe(1);
     // Exactamente UN correo consolidado encolado (dedup lo garantiza).
     const correos = await prisma.emailOutbox.count({
       where: { dedupKey: dedupConsolidadoFarmacia(solId) },

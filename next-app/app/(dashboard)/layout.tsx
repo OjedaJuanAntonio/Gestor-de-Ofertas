@@ -1,26 +1,19 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+import { getSessionUser } from "@/lib/authz";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { getBadgeCounts } from "@/lib/data/badges";
-import type { Role } from "@/types";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-
-  if (!session?.user) {
+  // Misma lectura de sesión que usan las páginas (una sola por request).
+  const user = await getSessionUser();
+  if (!user) {
     redirect("/login");
   }
-
-  const { id, role, nombre, email } = session.user as {
-    id: string;
-    role: Role;
-    nombre: string;
-    email: string;
-  };
+  const { id, role, nombre, email } = user;
 
   const counts = await getBadgeCounts(role, id);
   const badges: Record<string, number> = {};

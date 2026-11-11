@@ -66,11 +66,19 @@ export async function confirmarCargasERP(
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1) Sella la carga en el ERP.
-      await tx.itemSolicitud.updateMany({
-        where: { id: { in: itemIds } },
+      // 1) Sella la carga en el ERP. Guardado contra carreras: solo si el ítem
+      // sigue aprobado y sin cargar (igual que decisiones y testers). Si otra
+      // confirmación simultánea ya lo tomó, se aborta todo.
+      const sellados = await tx.itemSolicitud.updateMany({
+        where: {
+          id: { in: itemIds },
+          estadoDecision: "APROBADO",
+          cargadoERP: false,
+          motivo: { not: "PROBADOR" },
+        },
         data: { cargadoERP: true, fechaCargaERP: ahora },
       });
+      if (sellados.count !== itemIds.length) throw new Error("CARRERA");
       for (const id of itemIds) {
         await tx.auditLog.create({
           data: {
@@ -146,6 +154,9 @@ export async function confirmarCargasERP(
       }
     });
   } catch (e) {
+    if (e instanceof Error && e.message === "CARRERA") {
+      return { ok: false, error: "Algunos ítems ya estaban cargados. Refrescá." };
+    }
     console.error("[confirmarCargasERP] error:", e);
     return { ok: false, error: "No se pudieron confirmar las cargas. Reintentá." };
   }

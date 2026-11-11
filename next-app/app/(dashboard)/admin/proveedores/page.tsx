@@ -1,10 +1,12 @@
 import { Factory } from "lucide-react";
 import { listProveedores, listCompradoresOptions } from "@/lib/data/admin";
 import { ProveedoresAdmin } from "@/components/admin/ProveedoresAdmin";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Proveedores · Admin" };
 
 export default async function ProveedoresPage() {
+  await requireRole("ADMIN");
   const [proveedores, compradores] = await Promise.all([
     listProveedores(),
     listCompradoresOptions(),

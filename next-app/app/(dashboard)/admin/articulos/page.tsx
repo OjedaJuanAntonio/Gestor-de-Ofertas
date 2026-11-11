@@ -1,10 +1,12 @@
 import { Upload } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ImportArticulos } from "@/components/admin/ImportArticulos";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Artículos / CSV · Admin" };
 
 export default async function ArticulosPage() {
+  await requireRole("ADMIN");
   const total = await prisma.articulo.count();
   return (
     <div className="mx-auto max-w-4xl">

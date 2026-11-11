@@ -6,6 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
+import { rutaInternaSegura } from "@/lib/safe-redirect";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +22,10 @@ import {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") ?? "/";
+  // Solo rutas internas: evita que un link armado mande a otro sitio tras el login.
+  const callbackUrl = rutaInternaSegura(searchParams.get("callbackUrl"), {
+    origin: typeof window === "undefined" ? undefined : window.location.origin,
+  });
   const cambiada = searchParams.get("cambiada") === "1";
 
   const [email, setEmail] = useState("");

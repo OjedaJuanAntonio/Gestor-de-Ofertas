@@ -57,6 +57,9 @@ jobs:
       - name: Seed (requerido por los tests de integración)
         run: npx prisma db seed
 
+      - name: Vulnerabilidades en dependencias de producción (altas o críticas)
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 
@@ -94,6 +97,9 @@ jobs:
       AUTH_SECRET: ci-secret-de-32-caracteres-o-mas-para-el-pipeline
       AUTH_URL: http://localhost:3000
       EMAIL_DRY_RUN: "true"
+      # La sesión se revalida contra la base cada 1 s (default: 5 min) para que
+      # el e2e pueda comprobar que desactivar un usuario le corta la sesión.
+      SESSION_REVALIDAR_SEG: "1"
 
     defaults:
       run:

@@ -9,6 +9,7 @@ import {
   registrarFallo,
   limpiarIntentos,
 } from "@/lib/login-throttle";
+import { huellaPassword, revalidarToken } from "@/lib/session-check";
 
 // ─────────────────────────────────────────────────────────────
 // lib/auth.ts — Configuración completa de NextAuth
@@ -22,6 +23,19 @@ const loginSchema = z.object({
 
 export const { auth, signIn, signOut, handlers } = NextAuth({
   ...authConfig,
+
+  callbacks: {
+    ...authConfig.callbacks,
+    // En el login copia los datos del usuario al token (callback base). En
+    // cada uso posterior revalida contra la base: si el usuario fue
+    // desactivado o cambió su contraseña, devuelve null y la sesión cae.
+    async jwt(params) {
+      const token = await authConfig.callbacks!.jwt!(params);
+      if (!token) return token;
+      if (params.user) return { ...token, checkedAt: Date.now() };
+      return revalidarToken(token);
+    },
+  },
 
   providers: [
     Credentials({
@@ -74,6 +88,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           role: user.role,
           farmaciaId: user.farmaciaId,
           mustChangePassword: user.mustChangePassword,
+          pv: huellaPassword(user.password),
         };
       },
     }),

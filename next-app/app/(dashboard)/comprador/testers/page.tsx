@@ -1,17 +1,14 @@
-import { auth } from "@/lib/auth";
+import { requireRole } from "@/lib/authz";
 import { getTestersPendientes } from "@/lib/data/testers";
 import { TestersComprador } from "@/components/comprador/TestersComprador";
 
 export const metadata = { title: "Testers · Comprador" };
 
 export default async function TestersPage() {
-  const session = await auth();
-  const user = session?.user as { id: string; role?: string } | undefined;
+  const user = await requireRole("ADMIN", "COMPRADOR");
 
   // El admin ve todos los testers pendientes; el comprador, solo los suyos.
-  const items = user
-    ? await getTestersPendientes(user.role === "ADMIN" ? undefined : user.id)
-    : [];
+  const items = await getTestersPendientes(user.role === "ADMIN" ? undefined : user.id);
 
   return (
     <div className="mx-auto max-w-7xl">

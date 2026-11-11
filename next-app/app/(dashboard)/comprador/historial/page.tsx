@@ -1,5 +1,5 @@
 import { History, Search } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireRole } from "@/lib/authz";
 import { getHistoricoComprador } from "@/lib/data/comprador";
 import { SortableTh } from "@/components/historial/SortableTh";
 import { ESTADO_DECISION_LABEL } from "@/types";
@@ -75,9 +75,8 @@ export default async function HistorialCompradorPage({
   const sort = sp.sort ?? SORT_DEFECTO;
   const dir: Dir = sp.dir === "asc" ? "asc" : "desc";
 
-  const session = await auth();
-  const compradorId = (session?.user as { id?: string } | undefined)?.id ?? "";
-  const data = await getHistoricoComprador(compradorId, {
+  const user = await requireRole("ADMIN", "COMPRADOR");
+  const data = await getHistoricoComprador(user.id, {
     page,
     estado,
     q: q || undefined,

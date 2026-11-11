@@ -2,10 +2,12 @@ import { Users } from "lucide-react";
 import { listUsuarios, listFarmaciasOptions } from "@/lib/data/admin";
 import { UsuariosAdmin } from "@/components/admin/UsuariosAdmin";
 import { ImportUsuarios } from "@/components/admin/ImportUsuarios";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Usuarios · Admin" };
 
 export default async function UsuariosPage() {
+  await requireRole("ADMIN");
   const [usuarios, farmacias] = await Promise.all([
     listUsuarios(),
     listFarmaciasOptions(),
