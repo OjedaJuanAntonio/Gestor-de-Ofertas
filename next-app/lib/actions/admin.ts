@@ -6,7 +6,19 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { parseArticulosCsv } from "@/lib/import/articulos-csv";
+import { parseArticulosCsv, type ArticuloImport } from "@/lib/import/articulos-csv";
+import {
+  guardarArticulos,
+  claveProveedor,
+  nombreProveedorLimpio,
+} from "@/lib/import/articulos-bulk";
+import { FILAS_POR_LOTE, MAX_DESCRIPCION, MAX_NOMBRE_PROVEEDOR } from "@/lib/import/limites";
+import { normalizeEan, isValidEanFormat } from "@/lib/business/ean";
+import {
+  normalizarCodigoFarmacia,
+  esCodigoFarmaciaValido,
+  MENSAJE_CODIGO_INVALIDO,
+} from "@/lib/business/farmacia";
 import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
 import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
@@ -16,6 +28,23 @@ import { generarClaveTemporal, vencimientoClaveTemporal } from "@/lib/clave-temp
 // Server Actions del panel Admin (gestión de maestros).
 // Todas exigen rol ADMIN.
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Busca un proveedor por nombre sin distinguir mayúsculas ni espacios de más
+ * ("BAYER" = "Bayer"). Devuelve su id o null.
+ */
+async function buscarProveedorId(
+  db: Pick<typeof prisma, "proveedor">,
+  nombre: string,
+): Promise<number | null> {
+  const limpio = nombreProveedorLimpio(nombre);
+  const candidatos = await db.proveedor.findMany({
+    where: { nombre: { equals: limpio, mode: "insensitive" } },
+    select: { id: true, nombre: true },
+  });
+  const clave = claveProveedor(limpio);
+  return candidatos.find((c) => claveProveedor(c.nombre) === clave)?.id ?? null;
+}
 
 async function requireAdmin() {
   const session = await auth();
@@ -29,46 +58,103 @@ type Result = { ok: true; mensaje?: string } | { ok: false; error: string };
 // ── Farmacias ──────────────────────────────────────────────
 // El id de la farmacia ES su código interno (lo carga el admin).
 const FarmaciaSchema = z.object({
-  codigo: z.string().min(1, "El código es obligatorio."),
-  nombre: z.string().min(2, "Nombre demasiado corto."),
+  codigo: z.string().min(1, "El código es obligatorio.").max(60),
+  nombre: z.string().trim().min(2, "Nombre demasiado corto.").max(120),
   email: z.string().email("Email inválido.").optional().or(z.literal("")),
 });
+
+const esP2002 = (e: unknown) =>
+  e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
 
 export async function crearFarmacia(input: z.infer<typeof FarmaciaSchema>): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
   const p = FarmaciaSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const codigo = normalizarCodigoFarmacia(p.data.codigo);
+  if (!esCodigoFarmaciaValido(codigo)) return { ok: false, error: MENSAJE_CODIGO_INVALIDO };
   try {
     await prisma.farmacia.create({
-      data: {
-        id: p.data.codigo.trim(),
-        nombre: p.data.nombre.trim(),
-        email: p.data.email?.trim() || null,
-      },
+      data: { id: codigo, nombre: p.data.nombre, email: p.data.email?.trim() || null },
     });
     revalidatePath("/admin/farmacias");
     return { ok: true, mensaje: "Farmacia creada." };
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")
-      return { ok: false, error: "Ya existe una farmacia con ese código o nombre." };
+    if (esP2002(e)) return { ok: false, error: "Ya existe una farmacia con ese código o nombre." };
+    console.error("[crearFarmacia] error:", e);
     return { ok: false, error: "No se pudo crear la farmacia." };
+  }
+}
+
+const EditarFarmaciaSchema = FarmaciaSchema.extend({
+  /** Código actual (el id antes de editar). */
+  id: z.string().min(1),
+});
+
+/**
+ * Edita nombre, email y/o código de una farmacia. Cambiar el código cambia su
+ * id: usuarios y solicitudes lo siguen solos (FK con ON UPDATE CASCADE). Las
+ * solicitudes ya enviadas conservan el nombre y el mail de ese momento.
+ */
+export async function actualizarFarmacia(
+  input: z.infer<typeof EditarFarmaciaSchema>,
+): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  const p = EditarFarmaciaSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: p.error.issues[0].message };
+  const codigo = normalizarCodigoFarmacia(p.data.codigo);
+  if (!esCodigoFarmaciaValido(codigo)) return { ok: false, error: MENSAJE_CODIGO_INVALIDO };
+  try {
+    await prisma.farmacia.update({
+      where: { id: p.data.id },
+      data: { id: codigo, nombre: p.data.nombre, email: p.data.email?.trim() || null },
+    });
+    revalidatePath("/admin/farmacias");
+    revalidatePath("/admin/usuarios");
+    return { ok: true, mensaje: "Farmacia actualizada." };
+  } catch (e) {
+    if (esP2002(e)) return { ok: false, error: "Ya existe otra farmacia con ese código o nombre." };
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2025")
+      return { ok: false, error: "La farmacia ya no existe. Refrescá." };
+    console.error("[actualizarFarmacia] error:", e);
+    return { ok: false, error: "No se pudo actualizar la farmacia." };
   }
 }
 
 export async function toggleFarmacia(id: string, activa: boolean): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
-  await prisma.farmacia.update({ where: { id }, data: { activa } });
+  try {
+    await prisma.farmacia.update({ where: { id: String(id) }, data: { activa: activa === true } });
+  } catch {
+    return { ok: false, error: "La farmacia ya no existe. Refrescá." };
+  }
   revalidatePath("/admin/farmacias");
   return { ok: true };
 }
 
 // ── Import masivo de farmacias (CSV) ───────────────────────
+export type ConflictoFarmacia = { codigo: string; nombre: string; motivo: string };
+
 export type ImportFarmaciasResult =
-  | { ok: true; importados: number; omitidos: number; errores: { linea: number; motivo: string }[] }
+  | {
+      ok: true;
+      creadas: number;
+      actualizadas: number;
+      sinCambios: number;
+      /** Filas que no se pudieron aplicar, con el motivo (antes se omitían en silencio). */
+      conflictos: ConflictoFarmacia[];
+      errores: { linea: number; motivo: string }[];
+    }
   | { ok: false; error: string };
 
+/**
+ * Crea las farmacias nuevas y ACTUALIZA las existentes (por código): sirve para
+ * corregir nombres o mails volviendo a subir la planilla. Un mail vacío en el
+ * archivo no borra el mail ya cargado. Si el nombre ya lo usa OTRA farmacia,
+ * la fila se informa como conflicto.
+ */
 export async function importarFarmacias(csvText: string): Promise<ImportFarmaciasResult> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
@@ -78,21 +164,71 @@ export async function importarFarmacias(csvText: string): Promise<ImportFarmacia
     return { ok: false, error: "No hay filas válidas para importar." };
 
   try {
-    // createMany con skipDuplicates: las farmacias con nombre ya existente se
-    // omiten (nombre es @unique) en vez de fallar todo el lote.
-    const res = await prisma.farmacia.createMany({
-      data: validos.map((f) => ({ id: f.codigo, nombre: f.nombre, email: f.email })),
-      skipDuplicates: true,
+    const existentes = await prisma.farmacia.findMany({
+      select: { id: true, nombre: true, email: true },
     });
+    const porId = new Map(existentes.map((f) => [f.id, f]));
+    const idPorNombre = new Map(existentes.map((f) => [f.nombre.trim().toLowerCase(), f.id]));
+
+    const conflictos: ConflictoFarmacia[] = [];
+    const aCrear: { id: string; nombre: string; email: string | null }[] = [];
+    const aActualizar: { id: string; nombre: string; email: string | null }[] = [];
+    let sinCambios = 0;
+
+    for (const f of validos) {
+      const clave = f.nombre.trim().toLowerCase();
+      const duenio = idPorNombre.get(clave);
+      if (duenio !== undefined && duenio !== f.codigo) {
+        conflictos.push({
+          codigo: f.codigo,
+          nombre: f.nombre,
+          motivo: `El nombre ya lo usa la farmacia ${duenio}`,
+        });
+        continue;
+      }
+      const actual = porId.get(f.codigo);
+      if (!actual) {
+        aCrear.push({ id: f.codigo, nombre: f.nombre, email: f.email });
+        idPorNombre.set(clave, f.codigo);
+        continue;
+      }
+      const email = f.email ?? actual.email; // mail vacío en el archivo = no tocar
+      if (actual.nombre === f.nombre && actual.email === email) {
+        sinCambios++;
+        continue;
+      }
+      aActualizar.push({ id: f.codigo, nombre: f.nombre, email });
+      idPorNombre.delete(actual.nombre.trim().toLowerCase());
+      idPorNombre.set(clave, f.codigo);
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (aCrear.length) await tx.farmacia.createMany({ data: aCrear });
+      for (const f of aActualizar) {
+        await tx.farmacia.update({
+          where: { id: f.id },
+          data: { nombre: f.nombre, email: f.email },
+        });
+      }
+    });
+
     revalidatePath("/admin/farmacias");
     return {
       ok: true,
-      importados: res.count,
-      omitidos: validos.length - res.count,
+      creadas: aCrear.length,
+      actualizadas: aActualizar.length,
+      sinCambios,
+      conflictos,
       errores,
     };
-  } catch {
-    return { ok: false, error: "Error al guardar las farmacias." };
+  } catch (e) {
+    if (esP2002(e))
+      return {
+        ok: false,
+        error: "Hay códigos o nombres repetidos entre sí en el archivo. No se guardó nada.",
+      };
+    console.error("[importarFarmacias] error:", e);
+    return { ok: false, error: "Error al guardar las farmacias. No se guardó nada." };
   }
 }
 
@@ -121,7 +257,14 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
     // Para un comprador, los "laboratorios" que se escriben se traducen en
     // asignarle esos proveedores (uno por nombre; se crean si no existen).
     const labs = d.role === "COMPRADOR"
-      ? [...new Set(d.laboratorios.map((l) => l.trim()).filter(Boolean))]
+      ? [
+          ...new Map(
+            d.laboratorios
+              .map((l) => l.trim())
+              .filter(Boolean)
+              .map((l) => [claveProveedor(l), l] as const),
+          ).values(),
+        ]
       : [];
     await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -137,12 +280,15 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
           claveTemporalVence: vencimientoClaveTemporal(),
         },
       });
-      for (const nombre of labs) {
-        await tx.proveedor.upsert({
-          where: { nombre },
-          update: { compradorId: user.id },
-          create: { nombre, compradorId: user.id },
-        });
+      for (const lab of labs) {
+        const existente = await buscarProveedorId(tx, lab);
+        if (existente !== null) {
+          await tx.proveedor.update({ where: { id: existente }, data: { compradorId: user.id } });
+        } else {
+          await tx.proveedor.create({
+            data: { nombre: nombreProveedorLimpio(lab), compradorId: user.id },
+          });
+        }
       }
     });
     if (labs.length) invalidarTodosLosArticulos();
@@ -245,7 +391,7 @@ export type ImportUsuariosResult =
 
 /**
  * Alta masiva de logins de farmacia: un usuario (rol FARMACIA) por fila,
- * matcheado con una farmacia EXISTENTE por nombre (case-insensitive). Cada
+ * matcheado con una farmacia EXISTENTE por código (o por nombre). Cada
  * usuario recibe una clave temporal aleatoria propia (con vencimiento) y
  * mustChangePassword=true. Los emails ya existentes se omiten; las farmacias
  * que no existen se informan aparte (hay que importarlas primero).
@@ -257,19 +403,26 @@ export async function importarUsuariosFarmacia(csvText: string): Promise<ImportU
   const { validos, errores } = parseUsuariosCsv(csvText);
   if (validos.length === 0) return { ok: false, error: "No hay filas válidas para importar." };
 
-  // Resolver farmacias por nombre (case-insensitive, robusto a diferencias de mayúsculas).
+  // Resolver la farmacia: por CÓDIGO si la fila lo trae (inequívoco); si no,
+  // por nombre sin distinguir mayúsculas.
   const todas = await prisma.farmacia.findMany({ select: { id: true, nombre: true } });
-  const porNombre = new Map(todas.map((f) => [f.nombre.trim().toLowerCase(), f.id]));
+  const porCodigo = new Map(todas.map((f) => [f.id, f]));
+  const porNombre = new Map(todas.map((f) => [f.nombre.trim().toLowerCase(), f]));
 
   const noEncontradas: string[] = [];
   const candidatos: { farmacia: string; farmaciaId: string; email: string; nombre: string }[] = [];
   for (const v of validos) {
-    const farmaciaId = porNombre.get(v.farmacia.toLowerCase());
-    if (!farmaciaId) {
-      noEncontradas.push(v.farmacia);
+    const f = v.codigo ? porCodigo.get(v.codigo) : porNombre.get(v.farmacia.toLowerCase());
+    if (!f) {
+      noEncontradas.push(v.codigo || v.farmacia);
       continue;
     }
-    candidatos.push({ farmacia: v.farmacia, farmaciaId, email: v.email, nombre: v.nombre || v.farmacia });
+    candidatos.push({
+      farmacia: f.nombre,
+      farmaciaId: f.id,
+      email: v.email,
+      nombre: v.nombre || f.nombre,
+    });
   }
 
   if (candidatos.length === 0)
@@ -339,6 +492,10 @@ export type ImportResult =
   | { ok: true; importados: number; errores: { linea: number; motivo: string }[] }
   | { ok: false; error: string };
 
+/**
+ * Import de un CSV chico de una sola vez (texto pegado). Para el maestro
+ * completo la pantalla usa `importarArticulosLote`, por tandas.
+ */
 export async function importarArticulos(csvText: string): Promise<ImportResult> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
@@ -348,51 +505,85 @@ export async function importarArticulos(csvText: string): Promise<ImportResult> 
     return { ok: false, error: "No hay filas válidas para importar." };
 
   try {
-    // Resolver/crear los proveedores (laboratorios) por nombre, una sola vez.
-    // El CSV sigue trayendo el nombre del laboratorio; acá se mapea a su FK.
-    const nombresProv = [...new Set(validos.map((a) => a.laboratorio))];
-    const provIdPorNombre = new Map<string, number>();
-    for (const nombre of nombresProv) {
-      const p = await prisma.proveedor.upsert({
-        where: { nombre },
-        update: {},
-        create: { nombre },
-        select: { id: true, nombre: true },
-      });
-      provIdPorNombre.set(p.nombre, p.id);
-    }
-
-    // Upsert por lotes: el maestro real tiene ~155.000 artículos y hacerlo en una
-    // sola transacción (una query por fila) excede tiempos/límites de Postgres.
-    // Cada lote va en su propia transacción acotada.
-    const LOTE = 1000;
-    for (let i = 0; i < validos.length; i += LOTE) {
-      const lote = validos.slice(i, i + LOTE);
-      await prisma.$transaction(
-        lote.map((a) => {
-          const proveedorId = provIdPorNombre.get(a.laboratorio)!;
-          return prisma.articulo.upsert({
-            where: { codigoBarra: a.codigoBarra },
-            update: {
-              descripcion: a.descripcion,
-              proveedorId,
-              activo: true,
-            },
-            create: {
-              codigoBarra: a.codigoBarra,
-              descripcion: a.descripcion,
-              proveedorId,
-            },
-          });
-        }),
-      );
-    }
+    const { guardados } = await guardarArticulos(prisma, validos);
     invalidarTodosLosArticulos();
     revalidatePath("/admin/articulos");
-    return { ok: true, importados: validos.length, errores };
-  } catch {
+    return { ok: true, importados: guardados, errores };
+  } catch (e) {
+    console.error("[importarArticulos] error:", e);
     return { ok: false, error: "Error al guardar los artículos." };
   }
+}
+
+const FilaArticuloSchema = z.object({
+  codigoBarra: z.string().max(40),
+  descripcion: z.string().max(MAX_DESCRIPCION * 2),
+  laboratorio: z.string().max(MAX_NOMBRE_PROVEEDOR * 2),
+});
+const LoteArticulosSchema = z.object({
+  filas: z.array(FilaArticuloSchema).min(1).max(FILAS_POR_LOTE),
+});
+
+export type ImportLoteResult =
+  | { ok: true; guardados: number; rechazados: number; proveedoresNuevos: number }
+  | { ok: false; error: string };
+
+/**
+ * Guarda UNA tanda de artículos ya parseados en el navegador. El maestro real
+ * (~155.000 filas) no entra en un solo request, así que la pantalla lo parte y
+ * llama a esta acción una vez por tanda (ver components/admin/ImportArticulos).
+ * Cada fila se vuelve a validar acá: lo que manda el navegador no es confiable.
+ */
+export async function importarArticulosLote(
+  input: z.infer<typeof LoteArticulosSchema>,
+): Promise<ImportLoteResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+
+  const p = LoteArticulosSchema.safeParse(input);
+  if (!p.success) return { ok: false, error: "La tanda de artículos no es válida." };
+
+  const validas: ArticuloImport[] = [];
+  for (const f of p.data.filas) {
+    const codigoBarra = normalizeEan(f.codigoBarra);
+    const descripcion = f.descripcion.trim();
+    const laboratorio = f.laboratorio.trim();
+    if (
+      isValidEanFormat(codigoBarra) &&
+      descripcion.length > 0 &&
+      descripcion.length <= MAX_DESCRIPCION &&
+      laboratorio.length > 0 &&
+      laboratorio.length <= MAX_NOMBRE_PROVEEDOR
+    ) {
+      validas.push({ codigoBarra, descripcion, laboratorio });
+    }
+  }
+
+  try {
+    const { guardados, proveedoresNuevos } = await guardarArticulos(prisma, validas);
+    // Se invalida en cada tanda: si la carga se corta a la mitad, lo ya
+    // guardado no queda tapado por la caché.
+    invalidarTodosLosArticulos();
+    return {
+      ok: true,
+      guardados,
+      rechazados: p.data.filas.length - validas.length,
+      proveedoresNuevos,
+    };
+  } catch (e) {
+    console.error("[importarArticulosLote] error:", e);
+    return { ok: false, error: "Error al guardar la tanda de artículos." };
+  }
+}
+
+/** Cierra una carga por tandas: refresca el contador de la pantalla. */
+export async function finalizarImportArticulos(): Promise<Result> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  invalidarTodosLosArticulos();
+  revalidatePath("/admin/articulos");
+  revalidatePath("/admin/proveedores");
+  return { ok: true };
 }
 
 // ── Correos en dead-letter ─────────────────────────────────
@@ -427,8 +618,13 @@ export async function crearProveedor(input: z.infer<typeof ProveedorSchema>): Pr
   const p = ProveedorSchema.safeParse(input);
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   try {
+    if ((await buscarProveedorId(prisma, p.data.nombre)) !== null)
+      return { ok: false, error: "Ya existe un proveedor con ese nombre." };
     await prisma.proveedor.create({
-      data: { nombre: p.data.nombre.trim(), compradorId: p.data.compradorId || null },
+      data: {
+        nombre: nombreProveedorLimpio(p.data.nombre),
+        compradorId: p.data.compradorId || null,
+      },
     });
     invalidarTodosLosArticulos();
     revalidatePath("/admin/proveedores");

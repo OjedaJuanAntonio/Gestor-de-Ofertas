@@ -51,6 +51,14 @@ describe("ABM de proveedores", () => {
     expect(res.ok).toBe(false);
   });
 
+  it("rechaza el mismo nombre con otras mayúsculas o espacios de más", async () => {
+    expect((await crearProveedor({ nombre: NOMBRE.toUpperCase() })).ok).toBe(false);
+    expect((await crearProveedor({ nombre: `  ${NOMBRE.replace(" ", "   ")} ` })).ok).toBe(false);
+    expect(
+      await prisma.proveedor.count({ where: { nombre: { equals: NOMBRE, mode: "insensitive" } } }),
+    ).toBe(1);
+  });
+
   it("quita y reasigna el comprador responsable", async () => {
     const p = await prisma.proveedor.findUniqueOrThrow({ where: { nombre: NOMBRE } });
     const r1 = await asignarCompradorProveedor(p.id, null);

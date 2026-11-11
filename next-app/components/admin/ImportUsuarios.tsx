@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Upload, FileUp, CheckCircle2, AlertTriangle, Download } from "lucide-react";
 import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
+import { leerArchivoCsv } from "@/lib/import/leer-archivo";
 import {
   importarUsuariosFarmacia,
   type CredencialNueva,
@@ -13,9 +14,9 @@ import { toCsv } from "@/lib/export/csv";
 import { DIAS_VIGENCIA_CLAVE_TEMPORAL } from "@/lib/password";
 import { Button } from "@/components/ui/button";
 
-const EJEMPLO = `farmacia,email
-Farmacia Central 3303,central3303@farma.com
-Farmacia del Pueblo 1102,pueblo1102@farma.com`;
+const EJEMPLO = `codigo,email
+3303,central3303@farma.com
+1102,pueblo1102@farma.com`;
 
 /** Baja un CSV (para Excel) con farmacia, email y clave temporal de cada alta. */
 function descargarClaves(credenciales: CredencialNueva[]) {
@@ -41,25 +42,37 @@ export function ImportUsuarios() {
   const [texto, setTexto] = useState("");
   const [resultado, setResultado] = useState<ImportUsuariosResult | null>(null);
   const [pending, start] = useTransition();
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const preview = texto.trim() ? parseUsuariosCsv(texto) : null;
 
-  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setTexto(String(reader.result ?? ""));
-    reader.readAsText(file);
+    try {
+      const { texto: contenido, aviso: av } = await leerArchivoCsv(file);
+      setTexto(contenido);
+      setAviso(av);
+      setResultado(null);
+    } catch {
+      setResultado({ ok: false, error: "No se pudo leer el archivo." });
+    }
   }
 
   function importar() {
     setResultado(null);
     start(async () => {
-      const res = await importarUsuariosFarmacia(texto);
-      setResultado(res);
-      if (res.ok) {
-        setTexto("");
-        router.refresh();
+      try {
+        const res = await importarUsuariosFarmacia(texto);
+        setResultado(res);
+        if (res.ok) {
+          setTexto("");
+          setAviso(null);
+          router.refresh();
+        }
+      } catch {
+        setResultado({ ok: false, error: "Se cortó la conexión con el servidor. Probá de nuevo." });
       }
     });
   }
@@ -73,22 +86,31 @@ export function ImportUsuarios() {
           </label>
           <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50">
             <FileUp className="h-4 w-4" /> Subir archivo
-            <input type="file" accept=".csv,text/csv" onChange={onFile} className="hidden" />
+            <input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={onFile} className="hidden" />
           </label>
         </div>
         <textarea
           value={texto}
-          onChange={(e) => setTexto(e.target.value)}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setAviso(null);
+          }}
           placeholder={EJEMPLO}
           rows={6}
           className="w-full rounded-lg border border-slate-300 p-3 font-mono text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
         />
         <p className="mt-2 text-xs text-slate-400">
-          Columnas: farmacia y email (obligatorias), nombre (opcional). La farmacia debe existir ya
+          Columnas: codigo (el código interno de la farmacia) y email, más nombre (opcional). En
+          vez del código podés usar la columna farmacia con su nombre. La farmacia debe existir ya
           (importala primero). Cada usuario se crea con rol FARMACIA y una clave temporal propia,
           generada al azar, que vence a los {DIAS_VIGENCIA_CLAVE_TEMPORAL} días; al terminar vas a
           poder descargar el listado de claves. Los emails ya existentes se omiten.
         </p>
+        {aviso && (
+          <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {aviso}
+          </p>
+        )}
       </div>
 
       {preview && (

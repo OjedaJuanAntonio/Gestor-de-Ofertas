@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
-import { crearFarmacia, toggleFarmacia } from "@/lib/actions/admin";
+import { crearFarmacia, actualizarFarmacia, toggleFarmacia } from "@/lib/actions/admin";
 import { Button } from "@/components/ui/button";
 
 type Farmacia = {
@@ -21,6 +21,20 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const [edit, setEdit] = useState<{ id: string; codigo: string; nombre: string; email: string } | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  function guardarEdicion() {
+    if (!edit) return;
+    setEditError(null);
+    start(async () => {
+      const res = await actualizarFarmacia(edit);
+      if (res.ok) {
+        setEdit(null);
+        router.refresh();
+      } else setEditError(res.error);
+    });
+  }
 
   function crear() {
     setError(null);
@@ -102,7 +116,16 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
                     {f.activa ? "Activa" : "Inactiva"}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <button
+                    onClick={() => {
+                      setEditError(null);
+                      setEdit({ id: f.id, codigo: f.id, nombre: f.nombre, email: f.email ?? "" });
+                    }}
+                    className="mr-4 text-sm font-semibold text-slate-600 hover:underline"
+                  >
+                    Editar
+                  </button>
                   <button
                     onClick={() => toggle(f.id, !f.activa)}
                     disabled={pending}
@@ -116,6 +139,83 @@ export function FarmaciasAdmin({ farmacias }: { farmacias: Farmacia[] }) {
           </tbody>
         </table>
       </div>
+
+      {edit && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setEdit(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="editar-farmacia-titulo"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="editar-farmacia-titulo" className="text-xl font-bold text-slate-800">
+              Editar farmacia
+            </h2>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="edit-codigo" className="mb-1 block text-sm font-semibold text-slate-600">
+                  Código interno
+                </label>
+                <input
+                  id="edit-codigo"
+                  value={edit.codigo}
+                  onChange={(e) => setEdit({ ...edit, codigo: e.target.value })}
+                  className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                />
+                {edit.codigo.trim().toUpperCase() !== edit.id && (
+                  <p className="mt-1 text-xs text-amber-700">
+                    Vas a cambiar el código. Sus usuarios y solicitudes pasan al código nuevo.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label htmlFor="edit-nombre" className="mb-1 block text-sm font-semibold text-slate-600">
+                  Nombre
+                </label>
+                <input
+                  id="edit-nombre"
+                  value={edit.nombre}
+                  onChange={(e) => setEdit({ ...edit, nombre: e.target.value })}
+                  className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                />
+              </div>
+              <div>
+                <label htmlFor="edit-email" className="mb-1 block text-sm font-semibold text-slate-600">
+                  Email (opcional)
+                </label>
+                <input
+                  id="edit-email"
+                  type="email"
+                  value={edit.email}
+                  onChange={(e) => setEdit({ ...edit, email: e.target.value })}
+                  className="h-11 w-full rounded-lg border border-slate-300 px-3 text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-300"
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  A este mail llega el resultado de las solicitudes nuevas. Las ya enviadas conservan
+                  el mail que tenía en ese momento.
+                </p>
+              </div>
+            </div>
+            {editError && <p className="mt-3 text-sm font-semibold text-red-600">{editError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <Button variant="ghost" onClick={() => setEdit(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={guardarEdicion}
+                disabled={pending || edit.codigo.trim().length < 1 || edit.nombre.trim().length < 2}
+              >
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

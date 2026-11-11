@@ -13,7 +13,7 @@ Farmacia Norte,norte@farma.com,`;
     const { validos, errores } = parseUsuariosCsv(csv);
     expect(errores).toHaveLength(0);
     expect(validos).toHaveLength(2);
-    expect(validos[0]).toEqual({ farmacia: "Farmacia Central 3303", email: "central@farma.com", nombre: "Operador Central" });
+    expect(validos[0]).toEqual({ codigo: "", farmacia: "Farmacia Central 3303", email: "central@farma.com", nombre: "Operador Central" });
     expect(validos[1].nombre).toBe(""); // nombre vacío → la acción usará el de la farmacia
   });
 
@@ -28,6 +28,19 @@ Farmacia Sur;sur@farma.com`;
     const { validos, errores } = parseUsuariosCsv(csv);
     expect(errores).toHaveLength(0);
     expect(validos[0]).toMatchObject({ farmacia: "Farmacia Sur", email: "sur@farma.com" });
+  });
+
+  it("identifica la farmacia por código (normalizado) si viene esa columna", () => {
+    const { validos, errores } = parseUsuariosCsv("codigo;email\n f 001 ;a@farma.com\n3303;b@farma.com");
+    expect(errores).toHaveLength(0);
+    expect(validos.map((v) => v.codigo)).toEqual(["F001", "3303"]);
+    expect(validos[0].farmacia).toBe("");
+  });
+
+  it("con columna código, una fila sin código es un error", () => {
+    const { validos, errores } = parseUsuariosCsv("codigo,email\n,a@farma.com");
+    expect(validos).toHaveLength(0);
+    expect(errores[0]).toMatchObject({ linea: 2, motivo: "Falta el código de la farmacia" });
   });
 
   it("falta columna farmacia → error en línea 1", () => {

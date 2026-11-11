@@ -5,6 +5,12 @@
 // Pura y testeable: separa filas válidas de errores con su línea.
 // ─────────────────────────────────────────────────────────────
 
+import {
+  normalizarCodigoFarmacia,
+  esCodigoFarmaciaValido,
+  MENSAJE_CODIGO_INVALIDO,
+} from "@/lib/business/farmacia";
+
 export type FarmaciaImport = { codigo: string; nombre: string; email: string | null };
 export type ImportError = { linea: number; motivo: string };
 export type ParseResult = { validos: FarmaciaImport[]; errores: ImportError[] };
@@ -77,9 +83,13 @@ export function parseFarmaciasCsv(text: string): ParseResult {
       if (key) (row as Record<string, unknown>)[key] = cells[idx] ?? "";
     });
 
-    const codigo = String(row.codigo ?? "").trim();
+    const codigo = normalizarCodigoFarmacia(String(row.codigo ?? ""));
     if (!codigo) {
       errores.push({ linea, motivo: "Falta el código" });
+      continue;
+    }
+    if (!esCodigoFarmaciaValido(codigo)) {
+      errores.push({ linea, motivo: `${MENSAJE_CODIGO_INVALIDO} (${codigo})` });
       continue;
     }
     const nombre = String(row.nombre ?? "").trim();

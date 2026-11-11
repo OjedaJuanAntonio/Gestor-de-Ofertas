@@ -34,6 +34,18 @@ describe("parseFarmaciasCsv", () => {
     expect(r.errores).toHaveLength(4);
   });
 
+  it("normaliza el código (mayúsculas, sin espacios) y conserva ceros a la izquierda", () => {
+    const r = parseFarmaciasCsv("codigo,nombre\n f 001 ,Farmacia Uno\n0012,Farmacia Dos\n");
+    expect(r.errores).toHaveLength(0);
+    expect(r.validos.map((v) => v.codigo)).toEqual(["F001", "0012"]);
+  });
+
+  it("\"f001\" y \"F001\" son el mismo código (duplicado) y rechaza códigos con símbolos raros", () => {
+    const r = parseFarmaciasCsv("codigo,nombre\nf001,Farmacia Uno\nF001,Farmacia Dos\nA/1,Farmacia Tres\n");
+    expect(r.validos).toHaveLength(1);
+    expect(r.errores.map((e) => e.linea)).toEqual([3, 4]);
+  });
+
   it("falla si no hay columna codigo", () => {
     const r = parseFarmaciasCsv("nombre,email\nFarmacia Uno,x@y.com\n");
     expect(r.validos).toHaveLength(0);
