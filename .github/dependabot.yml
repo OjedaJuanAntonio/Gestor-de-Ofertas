@@ -1,0 +1,22 @@
+# Avisa (con PRs) de actualizaciones de dependencias y de las GitHub Actions.
+# Agrupado y acotado para no inundar de PRs; la seguridad la cubre además el
+# `npm audit` del CI.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /next-app
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # Parches y menores juntos en un PR por semana.
+      menores:
+        update-types: ["minor", "patch"]
+    labels: ["dependencias"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: ["dependencias", "ci"]

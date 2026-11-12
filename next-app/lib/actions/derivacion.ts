@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
 import { claveProveedor, nombreProveedorLimpio } from "@/lib/import/articulos-bulk";
+import { MAX_ITEMS_LOTE } from "@/lib/business/grid";
 
 // ─────────────────────────────────────────────────────────────
 // reasignarItems — Derivación de ítems sin comprador (Admin).
@@ -19,7 +20,7 @@ import { claveProveedor, nombreProveedorLimpio } from "@/lib/import/articulos-bu
 // ─────────────────────────────────────────────────────────────
 
 const InputSchema = z.object({
-  itemIds: z.array(z.string().min(1)).min(1, "No seleccionaste ítems."),
+  itemIds: z.array(z.string().min(1)).min(1, "No seleccionaste ítems.").max(MAX_ITEMS_LOTE, "Son demasiados ítems para una sola operación (máximo 2000). Dividilo en tandas."),
   compradorId: z.string().min(1, "Elegí un comprador."),
   crearMapeo: z.boolean().optional().default(false),
 });

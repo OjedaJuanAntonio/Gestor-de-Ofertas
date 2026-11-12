@@ -30,6 +30,14 @@ export function isValidVencimiento(mmYY: string): boolean {
  *  y evita que un número disparatado desborde el Int de la base. */
 export const MAX_CANTIDAD = 1_000_000;
 
+/**
+ * Máximo de ítems que una sola operación procesa de una vez (una solicitud, un
+ * lote de decisiones, una carga de Precios). Protege la transacción —cada ítem
+ * son varias consultas, y el timeout por defecto son 5 s— de un payload
+ * disparatado. Muy por encima de cualquier lote real.
+ */
+export const MAX_ITEMS_LOTE = 2000;
+
 export function validateRow(row: GridRowInput): RowValidation {
   const ean = normalizeEan(row.codigoBarra);
 

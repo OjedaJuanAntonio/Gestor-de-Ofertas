@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { despacharColaLuego } from "@/lib/email/despachar";
 import { evaluarCierre } from "@/lib/business/cierre";
 import { dedupConsolidadoFarmacia } from "@/lib/business/email-keys";
+import { MAX_ITEMS_LOTE } from "@/lib/business/grid";
 
 // ─────────────────────────────────────────────────────────────
 // marcarTesterEnviado — cierre de probadores/tester.
@@ -20,7 +21,7 @@ import { dedupConsolidadoFarmacia } from "@/lib/business/email-keys";
 // ─────────────────────────────────────────────────────────────
 
 const InputSchema = z.object({
-  itemIds: z.array(z.string().min(1)).min(1, "No seleccionaste testers."),
+  itemIds: z.array(z.string().min(1)).min(1, "No seleccionaste testers.").max(MAX_ITEMS_LOTE, "Son demasiados ítems para una sola operación (máximo 2000). Dividilo en tandas."),
 });
 
 export type MarcarTesterResult =

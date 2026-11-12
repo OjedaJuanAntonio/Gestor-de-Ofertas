@@ -1,5 +1,5 @@
 import { BarChart3, Download } from "lucide-react";
-import { getRegistrosMetrica } from "@/lib/data/analytics";
+import { getRegistrosMetrica, desdeHaceMeses, MESES_REPORTE_DEFECTO } from "@/lib/data/analytics";
 import {
   tiempoRespuestaComprador,
   tiempoCargaPrecios,
@@ -15,9 +15,15 @@ export const metadata = { title: "Reportes · Gerencial" };
 const fmtHoras = (h: number) =>
   h >= 24 ? `${(h / 24).toFixed(1)} d` : `${h.toFixed(1)} h`;
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ meses?: string }>;
+}) {
   await requireRole("ADMIN");
-  const registros = await getRegistrosMetrica();
+  // Ventana configurable por querystring (?meses=24); por defecto, 12 meses.
+  const meses = Math.min(120, Math.max(1, Number((await searchParams)?.meses) || MESES_REPORTE_DEFECTO));
+  const registros = await getRegistrosMetrica(desdeHaceMeses(meses));
 
   const resp = tiempoRespuestaComprador(registros);
   const carga = tiempoCargaPrecios(registros);
@@ -41,7 +47,8 @@ export default async function AnalyticsPage() {
           <div>
             <h1 className="text-2xl font-bold text-slate-800">Reportes gerenciales</h1>
             <p className="mt-0.5 text-base text-slate-600">
-              Auditoría del proceso: tiempos, efectividad y volumen.
+              Auditoría del proceso: tiempos, efectividad y volumen
+              {meses === MESES_REPORTE_DEFECTO ? " (últimos 12 meses)" : ` (últimos ${meses} meses)`}.
             </p>
           </div>
         </div>

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { despacharColaLuego } from "@/lib/email/despachar";
 import { evaluarCierre } from "@/lib/business/cierre";
 import { dedupRechazoTotal } from "@/lib/business/email-keys";
+import { MAX_ITEMS_LOTE } from "@/lib/business/grid";
 
 // ─────────────────────────────────────────────────────────────
 // confirmarDecisiones — Server Action bulk del comprador (Módulo 2).
@@ -29,7 +30,7 @@ const DecisionSchema = z.object({
 });
 
 const InputSchema = z.object({
-  decisiones: z.array(DecisionSchema).min(1, "No hay decisiones para confirmar."),
+  decisiones: z.array(DecisionSchema).min(1, "No hay decisiones para confirmar.").max(MAX_ITEMS_LOTE, "Son demasiados ítems para una sola operación (máximo 2000). Dividilo en tandas."),
 });
 
 export type ConfirmarDecisionesResult =

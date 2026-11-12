@@ -10,7 +10,8 @@ export async function GET() {
     return new Response("No autorizado", { status: 401 });
   }
 
-  const registros = await getRegistrosMetrica();
+  // La exportación sí trae todo el histórico (acción puntual del admin).
+  const registros = await getRegistrosMetrica(null);
   const tabla = tasaEfectividadPorComprador(registros);
 
   const csv = toCsv<TasaEfectividad>(

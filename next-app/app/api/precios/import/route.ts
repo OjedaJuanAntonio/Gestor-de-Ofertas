@@ -22,6 +22,11 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// El Excel de pendientes es chico (una fila por ítem aprobado). Un archivo más
+// grande que esto se rechaza antes de parsearlo, para no cargar en memoria algo
+// que no es el archivo esperado.
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+
 export async function POST(req: NextRequest) {
   const session = await auth();
   const role = (session?.user as { role?: string } | undefined)?.role;
@@ -39,6 +44,12 @@ export async function POST(req: NextRequest) {
   }
   if (!file) {
     return NextResponse.json({ ok: false, error: "Falta el archivo Excel." }, { status: 400 });
+  }
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      { ok: false, error: "El archivo es demasiado grande (máximo 10 MB)." },
+      { status: 413 },
+    );
   }
 
   // Parseo del Excel.
@@ -74,7 +85,8 @@ export async function POST(req: NextRequest) {
       if (!id) continue;
       filas.push({ id, cargado: esMarcaCargado(row.getCell(colCargado).text) });
     }
-  } catch {
+  } catch (e) {
+    console.error("[precios/import] no se pudo leer el Excel:", e);
     return NextResponse.json({ ok: false, error: "No se pudo leer el Excel. ¿Es un .xlsx válido?" }, { status: 400 });
   }
 
