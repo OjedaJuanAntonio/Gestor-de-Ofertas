@@ -21,16 +21,19 @@ import {
 } from "@/lib/actions/decisiones";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { fmtFecha } from "@/lib/fecha";
 
 type Decision = "APROBADO" | "RECHAZADO";
 type DecisionState = { decision?: Decision; condicion: string; motivoRechazo: string };
 
-const fmtFecha = (d: Date) =>
-  new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(
-    new Date(d),
-  );
-
-export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
+export function BandejaComprador({
+  items,
+  mostrarComprador = false,
+}: {
+  items: ItemBandeja[];
+  /** Vista del admin: muestra a qué comprador está asignado cada ítem. */
+  mostrarComprador?: boolean;
+}) {
   const router = useRouter();
   const [estados, setEstados] = useState<Record<string, DecisionState>>({});
   const [filtro, setFiltro] = useState("");
@@ -53,6 +56,7 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
         it.descripcion.toLowerCase().includes(q) ||
         it.farmaciaNombre.toLowerCase().includes(q) ||
         it.laboratorio.toLowerCase().includes(q) ||
+        (it.compradorNombre ?? "").toLowerCase().includes(q) ||
         it.solicitudCodigo.toLowerCase().includes(q) ||
         it.codigoBarra.includes(q),
     );
@@ -198,7 +202,19 @@ export function BandejaComprador({ items }: { items: ItemBandeja[] }) {
                       <div className="text-xs text-slate-500 italic">{it.observaciones}</div>
                     )}
                   </td>
-                  <td className="px-3 py-2.5 align-top text-slate-600">{it.laboratorio}</td>
+                  <td className="px-3 py-2.5 align-top text-slate-600">
+                    {it.laboratorio}
+                    {mostrarComprador && it.compradorNombre && (
+                      <div className="text-xs text-slate-500">
+                        {it.compradorNombre}
+                        {!it.compradorActivo && (
+                          <span className="ml-1 rounded bg-amber-100 px-1 font-semibold text-amber-800">
+                            inactivo
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2.5 align-top text-center text-lg font-semibold">{it.cantidad}</td>
                   <td className="px-3 py-2.5 align-top text-slate-600">
                     {MOTIVO_LABEL[it.motivo as MotivoSolicitud] ?? it.motivo}

@@ -136,7 +136,8 @@ describe("validateGrid", () => {
 // ─── Código de solicitud ──────────────────────────────────────
 describe("generateSolicitudCodigo", () => {
   it("formato SOL-YYMMDD-HHMMSS-XXXX", () => {
-    const cod = generateSolicitudCodigo(new Date(2026, 5, 16, 14, 30, 52), "4F7A");
+    // 17:30:52 UTC = 14:30:52 en Argentina: el código usa la hora de Argentina.
+    const cod = generateSolicitudCodigo(new Date("2026-06-16T17:30:52Z"), "4F7A");
     expect(cod).toBe("SOL-260616-143052-4F7A");
   });
   it("genera distintos sufijos por defecto", () => {

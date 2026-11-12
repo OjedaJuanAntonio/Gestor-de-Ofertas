@@ -22,6 +22,7 @@ import {
 import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
 import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
+import { processOutbox } from "@/lib/email/outbox";
 import { generarClaveTemporal, vencimientoClaveTemporal } from "@/lib/clave-temporal";
 
 // ─────────────────────────────────────────────────────────────
@@ -44,6 +45,41 @@ async function buscarProveedorId(
   });
   const clave = claveProveedor(limpio);
   return candidatos.find((c) => claveProveedor(c.nombre) === clave)?.id ?? null;
+}
+
+type Actor = { id: string; email?: string };
+
+/**
+ * Deja constancia en el AuditLog de una acción administrativa (quién, qué y
+ * sobre qué). Nunca se guardan contraseñas ni claves temporales en `diff`.
+ */
+async function auditar(
+  db: Pick<typeof prisma, "auditLog">,
+  actor: Actor,
+  entrada: { entityType: string; entityId: string; action: string; diff?: Prisma.InputJsonValue },
+): Promise<void> {
+  await db.auditLog.create({
+    data: {
+      entityType: entrada.entityType,
+      entityId: entrada.entityId,
+      action: entrada.action,
+      actorId: actor.id,
+      actorEmail: actor.email ?? null,
+      diff: entrada.diff,
+    },
+  });
+}
+
+/** Igual que `auditar`, pero un fallo al registrar no rompe la acción ya hecha. */
+async function auditarSinRomper(
+  actor: Actor,
+  entrada: Parameters<typeof auditar>[2],
+): Promise<void> {
+  try {
+    await auditar(prisma, actor, entrada);
+  } catch (e) {
+    console.error("[auditoría] no se pudo registrar:", entrada.action, e);
+  }
 }
 
 async function requireAdmin() {
@@ -76,6 +112,12 @@ export async function crearFarmacia(input: z.infer<typeof FarmaciaSchema>): Prom
   try {
     await prisma.farmacia.create({
       data: { id: codigo, nombre: p.data.nombre, email: p.data.email?.trim() || null },
+    });
+    await auditarSinRomper(admin, {
+      entityType: "Farmacia",
+      entityId: codigo,
+      action: "CREAR_FARMACIA",
+      diff: { nombre: p.data.nombre },
     });
     revalidatePath("/admin/farmacias");
     return { ok: true, mensaje: "Farmacia creada." };
@@ -110,6 +152,12 @@ export async function actualizarFarmacia(
       where: { id: p.data.id },
       data: { id: codigo, nombre: p.data.nombre, email: p.data.email?.trim() || null },
     });
+    await auditarSinRomper(admin, {
+      entityType: "Farmacia",
+      entityId: codigo,
+      action: "EDITAR_FARMACIA",
+      diff: { codigoAnterior: p.data.id, codigo, nombre: p.data.nombre, email: p.data.email?.trim() || null },
+    });
     revalidatePath("/admin/farmacias");
     revalidatePath("/admin/usuarios");
     return { ok: true, mensaje: "Farmacia actualizada." };
@@ -130,6 +178,11 @@ export async function toggleFarmacia(id: string, activa: boolean): Promise<Resul
   } catch {
     return { ok: false, error: "La farmacia ya no existe. Refrescá." };
   }
+  await auditarSinRomper(admin, {
+    entityType: "Farmacia",
+    entityId: String(id),
+    action: activa === true ? "ACTIVAR_FARMACIA" : "DESACTIVAR_FARMACIA",
+  });
   revalidatePath("/admin/farmacias");
   return { ok: true };
 }
@@ -212,6 +265,16 @@ export async function importarFarmacias(csvText: string): Promise<ImportFarmacia
       }
     });
 
+    await auditarSinRomper(admin, {
+      entityType: "Farmacia",
+      entityId: "*",
+      action: "IMPORTAR_FARMACIAS",
+      diff: {
+        creadas: aCrear.length,
+        actualizadas: aActualizar.length,
+        conflictos: conflictos.length,
+      },
+    });
     revalidatePath("/admin/farmacias");
     return {
       ok: true,
@@ -290,6 +353,12 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
           });
         }
       }
+      await auditar(tx, admin, {
+        entityType: "User",
+        entityId: user.id,
+        action: "CREAR_USUARIO",
+        diff: { email: user.email, role: user.role, farmaciaId: user.farmaciaId, proveedores: labs },
+      });
     });
     if (labs.length) invalidarTodosLosArticulos();
     revalidatePath("/admin/usuarios");
@@ -301,14 +370,57 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
   }
 }
 
+/**
+ * Activa o desactiva un usuario. Al DESACTIVAR un comprador, sus ítems
+ * pendientes pasan a "Sin asignar": antes quedaban a su nombre, en una bandeja
+ * a la que ya nadie entraba, y sus solicitudes no cerraban nunca. Sus
+ * proveedores quedan vinculados (por si vuelve), pero mientras esté inactivo el
+ * ruteo los trata como sin comprador.
+ */
 export async function toggleUsuario(id: string, activo: boolean): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
+  id = String(id);
+  activo = activo === true;
   if (admin.id === id && !activo)
     return { ok: false, error: "No podés desactivar tu propio usuario." };
-  await prisma.user.update({ where: { id }, data: { activo } });
+
+  let liberados = 0;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id },
+        data: { activo },
+        select: { role: true, email: true },
+      });
+      if (!activo && u.role === "COMPRADOR") {
+        const r = await tx.itemSolicitud.updateMany({
+          where: { compradorId: id, estadoDecision: "PENDIENTE" },
+          data: { compradorId: null },
+        });
+        liberados = r.count;
+      }
+      await auditar(tx, admin, {
+        entityType: "User",
+        entityId: id,
+        action: activo ? "ACTIVAR_USUARIO" : "DESACTIVAR_USUARIO",
+        diff: { email: u.email, role: u.role, itemsPasadosASinAsignar: liberados },
+      });
+    });
+  } catch {
+    return { ok: false, error: "El usuario ya no existe. Refrescá." };
+  }
+
+  // El comprador resuelto por la búsqueda depende de si está activo.
+  invalidarTodosLosArticulos();
   revalidatePath("/admin/usuarios");
-  return { ok: true };
+  revalidatePath("/admin/sin-asignar");
+  return {
+    ok: true,
+    mensaje: liberados
+      ? `Usuario desactivado. ${liberados} ítem(s) pendiente(s) pasaron a "Sin asignar".`
+      : undefined,
+  };
 }
 
 const ResetPasswordSchema = z.object({
@@ -333,6 +445,11 @@ export async function resetearPassword(
         mustChangePassword: true,
         claveTemporalVence: vencimientoClaveTemporal(),
       },
+    });
+    await auditarSinRomper(admin, {
+      entityType: "User",
+      entityId: p.data.id,
+      action: "RESETEAR_CLAVE",
     });
     revalidatePath("/admin/usuarios");
     return { ok: true, mensaje: "Contraseña actualizada. Se le pedirá cambiarla al entrar." };
@@ -364,6 +481,12 @@ export async function resetearAClaveTemporal(id: string): Promise<ClaveTemporalR
         mustChangePassword: true,
         claveTemporalVence: vence,
       },
+    });
+    await auditarSinRomper(admin, {
+      entityType: "User",
+      entityId: String(id),
+      action: "GENERAR_CLAVE_TEMPORAL",
+      diff: { vence: vence.toISOString() },
     });
     revalidatePath("/admin/usuarios");
     return { ok: true, clave, vence: vence.toISOString() };
@@ -469,6 +592,12 @@ export async function importarUsuariosFarmacia(csvText: string): Promise<ImportU
     });
     const emailsCreados = new Set(creados.map((u) => u.email));
 
+    await auditarSinRomper(admin, {
+      entityType: "User",
+      entityId: "*",
+      action: "IMPORTAR_USUARIOS_FARMACIA",
+      diff: { creados: creados.length, omitidos: candidatos.length - creados.length },
+    });
     revalidatePath("/admin/usuarios");
     return {
       ok: true,
@@ -505,8 +634,14 @@ export async function importarArticulos(csvText: string): Promise<ImportResult> 
     return { ok: false, error: "No hay filas válidas para importar." };
 
   try {
-    const { guardados } = await guardarArticulos(prisma, validos);
+    const { guardados, proveedoresNuevos } = await guardarArticulos(prisma, validos);
     invalidarTodosLosArticulos();
+    await auditarSinRomper(admin, {
+      entityType: "Articulo",
+      entityId: "*",
+      action: "IMPORTAR_ARTICULOS",
+      diff: { guardados, proveedoresNuevos },
+    });
     revalidatePath("/admin/articulos");
     return { ok: true, importados: guardados, errores };
   } catch (e) {
@@ -576,14 +711,46 @@ export async function importarArticulosLote(
   }
 }
 
-/** Cierra una carga por tandas: refresca el contador de la pantalla. */
-export async function finalizarImportArticulos(): Promise<Result> {
+/**
+ * Cierra una carga por tandas: deja constancia en la auditoría y refresca el
+ * contador de la pantalla. Los totales los informa el navegador (son para el
+ * registro; lo guardado ya lo validó cada tanda).
+ */
+export async function finalizarImportArticulos(
+  resumen: { guardados?: number; proveedoresNuevos?: number } = {},
+): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+  await auditarSinRomper(admin, {
+    entityType: "Articulo",
+    entityId: "*",
+    action: "IMPORTAR_ARTICULOS",
+    diff: { guardados: n(resumen?.guardados), proveedoresNuevos: n(resumen?.proveedoresNuevos) },
+  });
   invalidarTodosLosArticulos();
   revalidatePath("/admin/articulos");
   revalidatePath("/admin/proveedores");
   return { ok: true };
+}
+
+// ── Cola de correos ────────────────────────────────────────
+export type ProcesarColaResult =
+  | { ok: true; procesados: number; enviados: number; fallidos: number; dead: number }
+  | { ok: false; error: string };
+
+/** Procesa la cola de correos a pedido del admin (no espera al cron). */
+export async function procesarColaAhora(): Promise<ProcesarColaResult> {
+  const admin = await requireAdmin();
+  if (!admin) return { ok: false, error: "No autorizado." };
+  try {
+    const r = await processOutbox();
+    revalidatePath("/admin/correos");
+    return { ok: true, ...r };
+  } catch (e) {
+    console.error("[procesarColaAhora] error:", e);
+    return { ok: false, error: "No se pudo procesar la cola." };
+  }
 }
 
 // ── Correos en dead-letter ─────────────────────────────────
@@ -594,6 +761,7 @@ export async function reintentarCorreo(id: string): Promise<Result> {
     where: { id },
     data: { estado: "PENDIENTE", intentos: 0, scheduledAt: new Date(), ultimoError: null },
   });
+  await auditarSinRomper(admin, { entityType: "EmailOutbox", entityId: String(id), action: "REINTENTAR_CORREO" });
   revalidatePath("/admin/correos");
   return { ok: true };
 }
@@ -602,6 +770,7 @@ export async function cancelarCorreo(id: string): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
   await prisma.emailOutbox.update({ where: { id }, data: { estado: "CANCELADO" } });
+  await auditarSinRomper(admin, { entityType: "EmailOutbox", entityId: String(id), action: "CANCELAR_CORREO" });
   revalidatePath("/admin/correos");
   return { ok: true };
 }
@@ -620,11 +789,17 @@ export async function crearProveedor(input: z.infer<typeof ProveedorSchema>): Pr
   try {
     if ((await buscarProveedorId(prisma, p.data.nombre)) !== null)
       return { ok: false, error: "Ya existe un proveedor con ese nombre." };
-    await prisma.proveedor.create({
+    const creado = await prisma.proveedor.create({
       data: {
         nombre: nombreProveedorLimpio(p.data.nombre),
         compradorId: p.data.compradorId || null,
       },
+    });
+    await auditarSinRomper(admin, {
+      entityType: "Proveedor",
+      entityId: String(creado.id),
+      action: "CREAR_PROVEEDOR",
+      diff: { nombre: creado.nombre, compradorId: creado.compradorId },
     });
     invalidarTodosLosArticulos();
     revalidatePath("/admin/proveedores");
@@ -636,31 +811,98 @@ export async function crearProveedor(input: z.infer<typeof ProveedorSchema>): Pr
   }
 }
 
-/** Asigna (o quita, con null) el comprador responsable de un proveedor. */
+/**
+ * Asigna (o quita, con null) el comprador responsable de un proveedor.
+ *
+ * Los ítems PENDIENTES de los artículos de ese proveedor se mueven con él: al
+ * nuevo comprador, o a "Sin asignar" si se quita. Antes quedaban en la bandeja
+ * del comprador anterior. Los ya decididos no se tocan.
+ */
 export async function asignarCompradorProveedor(
   id: number,
   compradorId: string | null,
 ): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
-  try {
-    await prisma.proveedor.update({
-      where: { id },
-      data: { compradorId: compradorId || null },
+  id = Number(id);
+  const nuevoId = compradorId ? String(compradorId) : null;
+  if (!Number.isInteger(id)) return { ok: false, error: "Proveedor inválido." };
+
+  let nuevo: { id: string; email: string; nombre: string } | null = null;
+  if (nuevoId) {
+    const c = await prisma.user.findUnique({
+      where: { id: nuevoId },
+      select: { id: true, email: true, nombre: true, role: true, activo: true },
     });
-    // El cambio de responsable afecta el ruteo → invalidar la caché de lookups.
-    invalidarTodosLosArticulos();
-    revalidatePath("/admin/proveedores");
-    return { ok: true };
-  } catch {
+    if (!c || !c.activo || c.role !== "COMPRADOR")
+      return { ok: false, error: "El comprador elegido no es válido." };
+    nuevo = c;
+  }
+
+  let movidos = 0;
+  try {
+    await prisma.$transaction(async (tx) => {
+      const antes = await tx.proveedor.findUniqueOrThrow({
+        where: { id },
+        select: { nombre: true, compradorId: true },
+      });
+      await tx.proveedor.update({ where: { id }, data: { compradorId: nuevo?.id ?? null } });
+      const r = await tx.itemSolicitud.updateMany({
+        where: {
+          estadoDecision: "PENDIENTE",
+          articulo: { proveedorId: id },
+          NOT: { compradorId: nuevo?.id ?? null },
+        },
+        data: {
+          compradorId: nuevo?.id ?? null,
+          compradorMailHistorico: nuevo?.email ?? "SIN_COMPRADOR",
+        },
+      });
+      movidos = r.count;
+      await auditar(tx, admin, {
+        entityType: "Proveedor",
+        entityId: String(id),
+        action: "ASIGNAR_COMPRADOR",
+        diff: {
+          proveedor: antes.nombre,
+          antes: antes.compradorId,
+          despues: nuevo?.id ?? null,
+          itemsPendientesMovidos: movidos,
+        },
+      });
+    });
+  } catch (e) {
+    console.error("[asignarCompradorProveedor] error:", e);
     return { ok: false, error: "No se pudo asignar el comprador." };
   }
+
+  // El cambio de responsable afecta el ruteo → invalidar la caché de lookups.
+  invalidarTodosLosArticulos();
+  revalidatePath("/admin/proveedores");
+  revalidatePath("/admin/sin-asignar");
+  return {
+    ok: true,
+    mensaje: movidos
+      ? `${movidos} ítem(s) pendiente(s) pasaron a ${nuevo ? nuevo.nombre : '"Sin asignar"'}.`
+      : undefined,
+  };
 }
 
 export async function toggleProveedor(id: number, activo: boolean): Promise<Result> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
-  await prisma.proveedor.update({ where: { id }, data: { activo } });
+  try {
+    await prisma.proveedor.update({ where: { id: Number(id) }, data: { activo: activo === true } });
+  } catch {
+    return { ok: false, error: "El proveedor ya no existe. Refrescá." };
+  }
+  await auditarSinRomper(admin, {
+    entityType: "Proveedor",
+    entityId: String(id),
+    action: activo === true ? "ACTIVAR_PROVEEDOR" : "DESACTIVAR_PROVEEDOR",
+  });
+  // El ruteo ignora a los proveedores inactivos (ver lib/data/articulos.ts).
+  invalidarTodosLosArticulos();
   revalidatePath("/admin/proveedores");
   return { ok: true };
 }

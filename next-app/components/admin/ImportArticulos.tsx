@@ -98,7 +98,7 @@ export function ImportArticulos() {
           total: filas.length,
         });
       }
-      await finalizarImportArticulos();
+      await finalizarImportArticulos({ guardados, proveedoresNuevos });
       setEstado({ tipo: "ok", guardados, rechazados, proveedoresNuevos });
       limpiar();
       router.refresh();

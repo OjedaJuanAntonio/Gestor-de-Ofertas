@@ -33,13 +33,26 @@ export type ItemBandeja = {
   solicitudCodigo: string;
   farmaciaNombre: string;
   fechaEnvio: Date;
+  /** Comprador al que está asignado (lo usa la vista del admin, que ve todos). */
+  compradorNombre: string | null;
+  compradorActivo: boolean;
 };
 
+/**
+ * Ítems pendientes de decisión. Con un `compradorId`, los de ese comprador.
+ * Con null (ADMIN), los de TODOS los compradores: antes el admin veía solo los
+ * asignados a su propio usuario (ninguno), así que los pendientes de un
+ * comprador ausente o desactivado no aparecían en ninguna pantalla. Los que no
+ * tienen comprador están en Admin → Sin asignar.
+ */
 export async function getBandejaComprador(
-  compradorId: string,
+  compradorId: string | null,
 ): Promise<ItemBandeja[]> {
   const items = await prisma.itemSolicitud.findMany({
-    where: { compradorId, estadoDecision: "PENDIENTE" },
+    where: {
+      compradorId: compradorId ?? { not: null },
+      estadoDecision: "PENDIENTE",
+    },
     select: {
       id: true,
       codigoBarra: true,
@@ -49,6 +62,7 @@ export async function getBandejaComprador(
       observaciones: true,
       laboratorioHistorico: true,
       articulo: { select: { descripcion: true } },
+      comprador: { select: { nombre: true, activo: true } },
       solicitud: {
         select: { codigo: true, fechaEnvio: true, nombreFarmaciaHistorico: true },
       },
@@ -68,6 +82,8 @@ export async function getBandejaComprador(
     solicitudCodigo: it.solicitud.codigo,
     farmaciaNombre: it.solicitud.nombreFarmaciaHistorico,
     fechaEnvio: it.solicitud.fechaEnvio,
+    compradorNombre: it.comprador?.nombre ?? null,
+    compradorActivo: it.comprador?.activo ?? false,
   }));
 }
 
@@ -86,8 +102,9 @@ export type HistoricoItem = {
 
 export const PAGE_SIZE = 50;
 
+/** Historial de decisiones de un comprador (o de todos, con null: vista del admin). */
 export async function getHistoricoComprador(
-  compradorId: string,
+  compradorId: string | null,
   opts: {
     page?: number;
     estado?: "APROBADO" | "RECHAZADO" | null;
@@ -104,7 +121,7 @@ export async function getHistoricoComprador(
   const dir = normalizarDir(opts.dir);
   const orderBy = (ORDEN_COMPRADOR[opts.sort ?? ""] ?? ORDEN_COMPRADOR.fecha)(dir);
   const where: Prisma.ItemSolicitudWhereInput = {
-    compradorId,
+    ...(compradorId ? { compradorId } : {}),
     estadoDecision: opts.estado ? opts.estado : { in: ["APROBADO", "RECHAZADO"] },
     ...(fecha ? { fechaAprobacion: fecha } : {}),
     // Búsqueda de texto: matchea EAN, producto, código de solicitud o farmacia.

@@ -31,6 +31,8 @@ export function ProveedoresAdmin({
   const [compradorId, setCompradorId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  // Resultado de asignar/quitar comprador (cuántos pendientes se movieron, o el error).
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null);
 
   function crear() {
     setError(null);
@@ -45,8 +47,11 @@ export function ProveedoresAdmin({
   }
 
   function asignar(id: number, nuevoCompradorId: string) {
+    setAviso(null);
     start(async () => {
-      await asignarCompradorProveedor(id, nuevoCompradorId || null);
+      const res = await asignarCompradorProveedor(id, nuevoCompradorId || null);
+      if (!res.ok) setAviso({ ok: false, texto: res.error });
+      else if (res.mensaje) setAviso({ ok: true, texto: res.mensaje });
       router.refresh();
     });
   }
@@ -86,6 +91,15 @@ export function ProveedoresAdmin({
         </div>
         {error && <p className="mt-2 text-sm font-semibold text-red-600">{error}</p>}
       </div>
+
+      {aviso && (
+        <p
+          role="status"
+          className={`rounded-lg border px-4 py-2 text-sm ${aviso.ok ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}
+        >
+          {aviso.texto}
+        </p>
+      )}
 
       {/* Tabla */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">

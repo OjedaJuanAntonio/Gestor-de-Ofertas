@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { despacharColaLuego } from "@/lib/email/despachar";
 import { evaluarCierre } from "@/lib/business/cierre";
 import { dedupConsolidadoFarmacia } from "@/lib/business/email-keys";
 
@@ -172,6 +173,8 @@ export async function marcarTesterEnviado(
     return { ok: false, error: "No se pudieron marcar los testers. Reintentá." };
   }
 
+  // Si se encoló un correo, sale apenas se responde (no espera al cron).
+  if (correosEncolados > 0) despacharColaLuego();
   revalidatePath("/comprador/testers");
   return {
     ok: true,

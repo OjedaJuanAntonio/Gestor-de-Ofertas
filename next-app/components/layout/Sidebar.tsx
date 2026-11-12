@@ -18,6 +18,7 @@ import {
   FlaskConical,
   History,
   KeyRound,
+  ScrollText,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -40,6 +41,7 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { label: "Artículos / CSV", href: "/admin/articulos", icon: Upload },
     { label: "Sin asignar",     href: "/admin/sin-asignar", icon: UserX },
     { label: "Correos",         href: "/admin/correos",   icon: Mail },
+    { label: "Auditoría",       href: "/admin/auditoria", icon: ScrollText },
   ],
   FARMACIA: [
     { label: "Nueva Solicitud", href: "/farmacia/nueva-solicitud", icon: ClipboardList },
@@ -56,11 +58,17 @@ const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   ],
 };
 
+// El admin ve todas las secciones. Compradores y Precios tienen cada uno su
+// "Historial": en el menú del admin se distinguen por el nombre.
 const ADMIN_FULL_NAV: NavItem[] = [
   ...NAV_BY_ROLE.ADMIN,
   ...NAV_BY_ROLE.FARMACIA,
-  ...NAV_BY_ROLE.COMPRADOR,
-  ...NAV_BY_ROLE.PRECIOS,
+  ...NAV_BY_ROLE.COMPRADOR.map((i) =>
+    i.href === "/comprador/historial" ? { ...i, label: "Historial de decisiones" } : i,
+  ),
+  ...NAV_BY_ROLE.PRECIOS.map((i) =>
+    i.href === "/precios/historial" ? { ...i, label: "Historial de cargas" } : i,
+  ),
 ];
 
 type SidebarProps = {

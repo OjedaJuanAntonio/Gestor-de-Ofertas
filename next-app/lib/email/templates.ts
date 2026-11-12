@@ -14,8 +14,8 @@ const esc = (s: unknown) =>
 
 const layout = (titulo: string, cuerpo: string) => `
 <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;max-width:640px;margin:0 auto;color:#1e293b">
-  <div style="background:#2563eb;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">
-    <strong style="font-size:18px">Droguería Central</strong> · Gestor de Ofertas
+  <div style="background:#004898;color:#fff;padding:16px 20px;border-radius:10px 10px 0 0">
+    <strong style="font-size:18px">Farmar</strong> · Gestor de Ofertas
   </div>
   <div style="border:1px solid #e2e8f0;border-top:none;padding:20px;border-radius:0 0 10px 10px">
     <h2 style="margin:0 0 12px;font-size:18px">${titulo}</h2>
@@ -70,7 +70,25 @@ function renderConsolidado(p: Record<string, unknown>): RenderedEmail {
   return {
     subject: `Resultado de tu solicitud ${p.codigo}`,
     html: layout("Resultado de tu solicitud", cuerpo),
-    text: `Solicitud ${p.codigo}: ${aprobados.length} aprobados, ${rechazados.length} rechazados.`,
+    text: [
+      `Tu solicitud ${p.codigo} fue procesada.`,
+      ...(aprobados.length
+        ? [
+            "",
+            `Aprobados (${aprobados.length}):`,
+            ...aprobados.map((i) => `- ${i.descripcion} (x${i.cantidad}): ${i.condicion ?? "—"}`),
+          ]
+        : []),
+      ...(rechazados.length
+        ? [
+            "",
+            `Rechazados (${rechazados.length}):`,
+            ...rechazados.map(
+              (i) => `- ${i.descripcion} (x${i.cantidad})${i.motivoRechazo ? `: ${i.motivoRechazo}` : ""}`,
+            ),
+          ]
+        : []),
+    ].join("\n"),
   };
 }
 

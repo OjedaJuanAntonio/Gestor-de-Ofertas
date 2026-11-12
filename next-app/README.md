@@ -63,9 +63,10 @@ app/                      Rutas (App Router)
   (dashboard)/farmacia    Módulo 1: carga (grilla tipo Excel) + mis-solicitudes
   (dashboard)/comprador   Módulo 2: bandeja de aprobaciones (bulk)
   (dashboard)/precios     Módulo 3: carga ERP + cierre
-  (dashboard)/admin       Reportes, usuarios, farmacias, artículos/CSV, correos
+  (dashboard)/admin       Reportes, usuarios, farmacias, proveedores, artículos/CSV,
+                          sin asignar, correos, auditoría
   api/articulos/lookup    Autocompletado de EAN (cache + rate limit)
-  api/cron/outbox         Procesa la cola de correos (Bearer CRON_SECRET o admin)
+  api/cron/outbox         Procesa la cola de correos (Bearer CRON_SECRET)
   api/export/analytics    Export CSV
 lib/
   business/               Reglas puras y testeadas (validación, cierre, multicomprador)
@@ -84,8 +85,9 @@ tests/                    Vitest (unit/integration) + Playwright (e2e)
 - **Envío transaccional e idempotente**: cabecera + ítems + notificaciones en una sola
   transacción; `idempotencyKey` evita duplicar lotes ante reintentos.
 - **Snapshots históricos** de farmacia y comprador (trazabilidad si el maestro cambia).
-- **Distribución multicomprador**: un correo por comprador; ítems de un laboratorio sin
-  comprador asignado se aíslan y se avisan (no se pierden).
+- **Distribución multicomprador**: cada ítem va a la bandeja del comprador responsable de su
+  proveedor (no se le manda correo); los de un proveedor sin comprador quedan en
+  "Sin asignar" para que el admin los derive (no se pierden).
 - **Cierre de ciclo**: una solicitud se finaliza cuando todos sus aprobados se cargan en
   el ERP (→ correo **consolidado** a la farmacia) o cuando es **100% rechazada**
   (→ correo de **rechazo total**, corrige el caso donde antes la farmacia nunca se
@@ -109,9 +111,19 @@ tests/                    Vitest (unit/integration) + Playwright (e2e)
    Muestra una clave temporal una sola vez; al entrar se pide elegir la definitiva. Si en esa
    base quedaron los usuarios demo (`*@drogueria.com`, clave `demo1234`), desactivalos con
    `--desactivar-demo` o desde **Usuarios**.
-4. **Correos**: poné `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y `EMAIL_DRY_RUN=false`.
-5. **Cron de la cola**: configurá un cron (Vercel Cron, QStash, GitHub Action) que llame
-   `POST /api/cron/outbox` cada 1-2 min con `Authorization: Bearer <CRON_SECRET>`.
+4. **Correos**: poné `RESEND_API_KEY`, `RESEND_FROM_EMAIL` (con un dominio verificado en
+   Resend) y `EMAIL_DRY_RUN=false`. En producción, sin `RESEND_API_KEY` los correos **fallan**
+   y quedan en la cola (no se dan por enviados). Admin → Correos muestra el estado.
+5. **Cola de correos**: cada correo sale apenas se cierra la solicitud. Como red de seguridad
+   (reintentos), el workflow `.github/workflows/correos.yml` procesa la cola cada 5 minutos.
+   Para activarlo, en GitHub → Settings → Secrets and variables → Actions:
+   - variable `APP_URL` (la URL pública de la app);
+   - secreto `CRON_SECRET` (el mismo valor que la variable de entorno `CRON_SECRET` de la app).
+
+   Alternativa: cualquier cron que llame `POST /api/cron/outbox` con
+   `Authorization: Bearer <CRON_SECRET>` (Vercel Cron en plan Pro, QStash…).
+6. **Zona horaria**: fechas, filtros por día y el código de cada solicitud usan la hora de
+   Argentina, sin importar dónde corra el servidor.
 
 ### Cargar los datos reales
 

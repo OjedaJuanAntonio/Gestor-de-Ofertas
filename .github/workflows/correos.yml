@@ -1,0 +1,47 @@
+name: Cola de correos
+
+# Procesa la cola de notificaciones a las farmacias cada 5 minutos.
+#
+# La app ya intenta enviar cada correo apenas se cierra una solicitud; este
+# cron es la red de seguridad: reintenta los que fallaron y despacha lo que
+# haya quedado pendiente.
+#
+# Configuración (GitHub → Settings → Secrets and variables → Actions):
+#   - Variable  APP_URL      p. ej. https://gestor-de-ofertas.vercel.app
+#   - Secreto   CRON_SECRET  el mismo valor que la variable de entorno de la app
+# Mientras falten, el workflow no hace nada (y no marca error).
+#
+# Nota: GitHub puede demorar las corridas programadas unos minutos, y las
+# desactiva si el repositorio pasa 60 días sin actividad.
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: cola-de-correos
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  procesar:
+    name: procesar cola
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      APP_URL: ${{ vars.APP_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Llamar a /api/cron/outbox
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::Falta configurar APP_URL (variable) o CRON_SECRET (secreto). No se procesó la cola."
+            exit 0
+          fi
+          respuesta=$(curl --silent --show-error --fail-with-body --max-time 120 \
+            --retry 2 --retry-delay 10 \
+            -X POST "${APP_URL%/}/api/cron/outbox" \
+            -H "Authorization: Bearer ${CRON_SECRET}")
+          echo "$respuesta"

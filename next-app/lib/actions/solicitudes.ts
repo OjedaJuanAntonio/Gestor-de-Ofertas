@@ -118,9 +118,14 @@ export async function enviarSolicitud(
     laboratorio: string;
   }[] = [];
 
-  // Resolución por lotes: una query al maestro + una a compradores, en vez de
-  // 2×N (una por fila). Keyeado por EAN normalizado.
-  const porEan = await lookupArticulosBatch(data.rows.map((r) => r.codigoBarra));
+  // Resolución por lotes: una sola query al maestro (con su proveedor y
+  // comprador) para todas las filas. SIN caché: a qué comprador va cada ítem
+  // se decide con lo que dice la base en este momento, no con lo que otra
+  // instancia cacheó antes de que el admin reasignara un proveedor.
+  const porEan = await lookupArticulosBatch(
+    data.rows.map((r) => r.codigoBarra),
+    { sinCache: true },
+  );
 
   for (let i = 0; i < data.rows.length; i++) {
     const row = data.rows[i];

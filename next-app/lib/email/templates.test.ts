@@ -14,7 +14,12 @@ describe("renderEmail", () => {
     expect(r.html).toContain("Aprobados (1)");
     expect(r.html).toContain("Rechazados (1)");
     expect(r.html).toContain("50%");
-    expect(r.text).toContain("1 aprobados, 1 rechazados");
+    // La versión de texto trae el mismo detalle (para clientes que no muestran HTML).
+    expect(r.text).toContain("Aprobados (1):\n- Aspirina (x5): 50%");
+    expect(r.text).toContain("Rechazados (1):\n- Bepanthen (x2): Vence");
+    // Marca actual, no la anterior.
+    expect(r.html).toContain("Farmar");
+    expect(r.html).not.toContain("Droguería Central");
   });
 
   it("RECHAZO_TOTAL menciona que no se aprobó nada", () => {

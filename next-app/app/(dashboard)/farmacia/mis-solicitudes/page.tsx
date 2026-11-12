@@ -5,17 +5,11 @@ import { getSolicitudesFarmacia } from "@/lib/data/farmacia";
 import { SortableTh } from "@/components/historial/SortableTh";
 import { ESTADO_SOLICITUD_LABEL } from "@/types";
 import type { EstadoSolicitud } from "@/types";
+import { fmtFechaHora } from "@/lib/fecha";
 
 export const metadata = { title: "Mis Solicitudes · Farmacia" };
 
-const fmt = (d: Date) =>
-  new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(d));
+const fmt = (d: Date) => fmtFechaHora(d);
 
 const ESTADO_CLS: Record<string, string> = {
   PENDIENTE: "bg-slate-100 text-slate-600",
