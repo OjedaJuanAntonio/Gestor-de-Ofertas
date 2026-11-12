@@ -7,8 +7,22 @@ import type { RegistroMetrica } from "@/lib/analytics/metrics";
 // timestamps y los aplana a RegistroMetrica.
 // ─────────────────────────────────────────────────────────────
 
+/** Ventana por defecto de los reportes: un año hacia atrás. */
+export const MESES_REPORTE_DEFECTO = 12;
+
+export function desdeHaceMeses(meses: number, ahora: Date = new Date()): Date {
+  const d = new Date(ahora);
+  d.setMonth(d.getMonth() - meses);
+  return d;
+}
+
+/**
+ * Registros para las métricas. Acotado a una ventana (por defecto 12 meses): con
+ * ~1.500 ítems por día, traer TODO el histórico en cada visita al dashboard no
+ * escala. `desde = null` fuerza todo el histórico (para una exportación puntual).
+ */
 export async function getRegistrosMetrica(
-  desde?: Date,
+  desde: Date | null = desdeHaceMeses(MESES_REPORTE_DEFECTO),
 ): Promise<RegistroMetrica[]> {
   const rows = await prisma.itemSolicitud.findMany({
     where: desde ? { solicitud: { fechaEnvio: { gte: desde } } } : undefined,

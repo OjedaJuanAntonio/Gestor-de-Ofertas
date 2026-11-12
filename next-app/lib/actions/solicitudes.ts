@@ -6,7 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { lookupArticulosBatch } from "@/lib/data/articulos";
 import { normalizeEan } from "@/lib/business/ean";
-import { validateRow } from "@/lib/business/grid";
+import { validateRow, MAX_ITEMS_LOTE } from "@/lib/business/grid";
 import { generateSolicitudCodigo } from "@/lib/business/solicitud";
 import { agruparPorComprador } from "@/lib/business/multicomprador";
 
@@ -33,7 +33,7 @@ const InputSchema = z.object({
   farmaciaId: z.string().min(1),
   emailManual: z.string().optional(), // override si la farmacia no tiene mail
   idempotencyKey: z.string().min(8),
-  rows: z.array(RowSchema).min(1, "La solicitud no tiene ítems."),
+  rows: z.array(RowSchema).min(1, "La solicitud no tiene ítems.").max(MAX_ITEMS_LOTE, "Son demasiados ítems para una sola operación (máximo 2000). Dividilo en tandas."),
 });
 
 export type EnviarSolicitudInput = z.infer<typeof InputSchema>;

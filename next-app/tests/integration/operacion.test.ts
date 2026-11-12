@@ -287,3 +287,20 @@ describe("cola de correos", () => {
     }
   });
 });
+
+describe("topes de lote (M6)", () => {
+  it("una solicitud con más de 2000 ítems se rechaza sin tocar la base", async () => {
+    mockAuth.mockResolvedValue({ user: { id: adminId, role: "ADMIN", email: "admin@drogueria.com" } } as never);
+    const rows = Array.from({ length: 2001 }, () => ({
+      codigoBarra: EAN,
+      cantidad: 1,
+      motivo: "SOBRESTOCK" as const,
+      fechaVencimiento: "10/27",
+      observaciones: "",
+    }));
+    const res = await enviarSolicitud({ farmaciaId, idempotencyKey: `tope-${TAG}`, rows });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/demasiados ítems/i);
+    expect(await prisma.solicitud.count({ where: { idempotencyKey: `tope-${TAG}` } })).toBe(0);
+  });
+});

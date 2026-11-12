@@ -302,7 +302,7 @@ const UsuarioSchema = z.object({
   password: z.string().min(10, "La contraseña debe tener al menos 10 caracteres."),
   role: z.enum(["ADMIN", "FARMACIA", "COMPRADOR", "PRECIOS"]),
   farmaciaId: z.string().optional().nullable(),
-  laboratorios: z.array(z.string().min(1)).optional().default([]),
+  laboratorios: z.array(z.string().min(1)).max(500, "Demasiados laboratorios.").optional().default([]),
 });
 
 export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promise<Result> {
@@ -453,7 +453,8 @@ export async function resetearPassword(
     });
     revalidatePath("/admin/usuarios");
     return { ok: true, mensaje: "Contraseña actualizada. Se le pedirá cambiarla al entrar." };
-  } catch {
+  } catch (e) {
+    console.error("[resetearPassword] error:", e);
     return { ok: false, error: "No se pudo actualizar la contraseña." };
   }
 }
@@ -490,7 +491,8 @@ export async function resetearAClaveTemporal(id: string): Promise<ClaveTemporalR
     });
     revalidatePath("/admin/usuarios");
     return { ok: true, clave, vence: vence.toISOString() };
-  } catch {
+  } catch (e) {
+    console.error("[resetearAClaveTemporal] error:", e);
     return { ok: false, error: "No se pudo resetear la contraseña." };
   }
 }
