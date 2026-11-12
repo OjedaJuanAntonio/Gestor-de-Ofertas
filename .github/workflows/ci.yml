@@ -126,8 +126,16 @@ jobs:
       - name: Seed
         run: npx prisma db seed
 
+      # Con reintentos: la instalación baja paquetes del sistema (apt) y un corte
+      # de red del runner tiraba abajo el job antes de correr un solo test.
       - name: Instalar navegador de Playwright
-        run: npx playwright install --with-deps chromium
+        run: |
+          for intento in 1 2 3; do
+            npx playwright install --with-deps chromium && exit 0
+            echo "Falló la instalación del navegador (intento $intento de 3); reintento en 20 s…"
+            sleep 20
+          done
+          exit 1
 
       - name: E2E (Playwright levanta el dev server)
         run: npm run test:e2e

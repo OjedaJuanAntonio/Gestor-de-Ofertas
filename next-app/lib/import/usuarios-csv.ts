@@ -2,17 +2,27 @@
 // Parser de CSV para el alta masiva de usuarios de farmacia.
 // Un usuario (login) por farmacia. Cabecera flexible (orden libre,
 // case-insensitive, con alias):
-//   farmacia, email, nombre (nombre es opcional → por defecto el de la farmacia)
-// El usuario se crea con rol FARMACIA y la clave temporal; el matcheo con la
-// farmacia existente (por nombre) se hace en la Server Action, no acá.
+//   codigo, email, nombre   (codigo = código interno de la farmacia; recomendado)
+//   farmacia, email, nombre (alternativa: por nombre de la farmacia)
+// `nombre` es opcional (por defecto, el de la farmacia). El usuario se crea con
+// rol FARMACIA y una clave temporal; el matcheo con la farmacia existente (por
+// código, o por nombre si no hay código) se hace en la Server Action, no acá.
 // Pura y testeable: separa filas válidas de errores con su línea.
 // ─────────────────────────────────────────────────────────────
 
-export type UsuarioImport = { farmacia: string; email: string; nombre: string };
+import { normalizarCodigoFarmacia } from "@/lib/business/farmacia";
+
+/** `codigo` (código interno de la farmacia) y/o `farmacia` (su nombre): al menos uno. */
+export type UsuarioImport = { codigo: string; farmacia: string; email: string; nombre: string };
 export type ImportError = { linea: number; motivo: string };
 export type ParseResult = { validos: UsuarioImport[]; errores: ImportError[] };
 
 const ALIASES: Record<string, keyof UsuarioImport> = {
+  codigo: "codigo",
+  código: "codigo",
+  codigofarmacia: "codigo",
+  códigofarmacia: "codigo",
+  idfarmacia: "codigo",
   farmacia: "farmacia",
   sucursal: "farmacia",
   razonsocial: "farmacia",
@@ -60,8 +70,13 @@ export function parseUsuariosCsv(text: string): ParseResult {
   const header = splitLine(lines[0], delimiter).map((h) => h.toLowerCase().replace(/\s+/g, ""));
   const colMap = header.map((h) => ALIASES[h] ?? null);
 
-  if (!colMap.includes("farmacia"))
-    return { validos, errores: [{ linea: 1, motivo: "Falta la columna 'farmacia'." }] };
+  const hayCodigo = colMap.includes("codigo");
+  const hayFarmacia = colMap.includes("farmacia");
+  if (!hayCodigo && !hayFarmacia)
+    return {
+      validos,
+      errores: [{ linea: 1, motivo: "Falta la columna 'codigo' (o 'farmacia') para identificar la farmacia." }],
+    };
   if (!colMap.includes("email"))
     return { validos, errores: [{ linea: 1, motivo: "Falta la columna 'email'." }] };
 
@@ -77,9 +92,13 @@ export function parseUsuariosCsv(text: string): ParseResult {
       if (key) (row as Record<string, unknown>)[key] = cells[idx] ?? "";
     });
 
+    const codigo = normalizarCodigoFarmacia(String(row.codigo ?? ""));
     const farmacia = String(row.farmacia ?? "").trim();
-    if (farmacia.length < 2) {
-      errores.push({ linea, motivo: "Farmacia faltante o demasiado corta" });
+    if (!codigo && farmacia.length < 2) {
+      errores.push({
+        linea,
+        motivo: hayCodigo ? "Falta el código de la farmacia" : "Farmacia faltante o demasiado corta",
+      });
       continue;
     }
 
@@ -94,7 +113,7 @@ export function parseUsuariosCsv(text: string): ParseResult {
     }
 
     seen.add(email);
-    validos.push({ farmacia, email, nombre: String(row.nombre ?? "").trim() });
+    validos.push({ codigo, farmacia, email, nombre: String(row.nombre ?? "").trim() });
   }
 
   return { validos, errores };

@@ -99,6 +99,29 @@ ZZ No Existe,fantasma@farma.test`;
   });
 });
 
+describe("importarUsuariosFarmacia por código", () => {
+  const EMAIL_COD = "por-codigo@farma.test";
+
+  it("matchea por el código interno de la farmacia y usa su nombre", async () => {
+    await prisma.user.deleteMany({ where: { email: EMAIL_COD } });
+    const fA = await prisma.farmacia.findUniqueOrThrow({ where: { nombre: FARM_A } });
+    try {
+      const res = await importarUsuariosFarmacia(`codigo,email\n${fA.id.toLowerCase()},${EMAIL_COD}\nNO-EXISTE-99,otro@farma.test`);
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.importados).toBe(1);
+      expect(res.noEncontradas).toEqual(["NO-EXISTE-99"]);
+      expect(res.credenciales[0]).toMatchObject({ farmacia: FARM_A, email: EMAIL_COD });
+
+      const u = await prisma.user.findUniqueOrThrow({ where: { email: EMAIL_COD } });
+      expect(u.farmaciaId).toBe(fA.id);
+      expect(u.nombre).toBe(FARM_A);
+    } finally {
+      await prisma.user.deleteMany({ where: { email: EMAIL_COD } });
+    }
+  });
+});
+
 describe("resetearAClaveTemporal", () => {
   it("genera una clave temporal aleatoria con vencimiento y fuerza el cambio", async () => {
     // El usuario EMAIL_RESET fue creado en el test anterior; lo normalizamos

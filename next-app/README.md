@@ -79,7 +79,8 @@ tests/                    Vitest (unit/integration) + Playwright (e2e)
 
 ### Reglas de negocio destacadas (con correcciones aplicadas)
 
-- **Un comprador maneja N laboratorios** (tabla `LaboratorioComprador`).
+- **Un comprador maneja N proveedores (laboratorios)**; cada artículo apunta a su proveedor
+  por clave foránea y cada proveedor tiene, a lo sumo, un comprador responsable.
 - **Envío transaccional e idempotente**: cabecera + ítems + notificaciones en una sola
   transacción; `idempotencyKey` evita duplicar lotes ante reintentos.
 - **Snapshots históricos** de farmacia y comprador (trazabilidad si el maestro cambia).
@@ -111,6 +112,36 @@ tests/                    Vitest (unit/integration) + Playwright (e2e)
 4. **Correos**: poné `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y `EMAIL_DRY_RUN=false`.
 5. **Cron de la cola**: configurá un cron (Vercel Cron, QStash, GitHub Action) que llame
    `POST /api/cron/outbox` cada 1-2 min con `Authorization: Bearer <CRON_SECRET>`.
+
+### Cargar los datos reales
+
+Orden recomendado: **farmacias → usuarios de farmacia → compradores → artículos → asignar
+compradores a los proveedores**.
+
+- **Farmacias** (Admin → Farmacias): CSV con `codigo, nombre, email`. El código es el ID
+  interno; se normaliza a mayúsculas sin espacios. Volver a subir la planilla **actualiza**
+  nombre y mail de las que ya existen. Si los códigos empiezan con cero, en Excel la columna
+  tiene que estar en formato Texto.
+- **Usuarios de farmacia** (Admin → Usuarios): CSV con `codigo, email` (el código de la
+  farmacia). Al terminar se descarga el CSV con la clave temporal de cada una.
+- **Maestro de artículos**: CSV con `codigoBarra, descripcion, laboratorio`. Dos caminos:
+  - Desde la pantalla (Admin → Artículos / CSV): acepta el archivo completo y lo sube por
+    tandas con barra de progreso.
+  - Desde la consola, contra la conexión directa a la base:
+
+    ```bash
+    npm run articulos:importar -- maestro.csv --probar   # solo valida y muestra el resumen
+    npm run articulos:importar -- maestro.csv            # carga (crea o actualiza)
+    npm run articulos:importar -- maestro.csv --desactivar-faltantes
+    ```
+
+    `--desactivar-faltantes` marca como inactivos los artículos que están en la base pero no
+    en el archivo (no borra nada).
+
+  Los dos detectan solos la codificación (UTF-8 o la de Excel en Windows) y no duplican
+  proveedores por diferencias de mayúsculas o espacios.
+- **Proveedores** (Admin → Proveedores): asignar el comprador responsable de cada uno. Los
+  artículos de un proveedor sin comprador caen en "Sin asignar".
 
 ### Cuentas y contraseñas
 

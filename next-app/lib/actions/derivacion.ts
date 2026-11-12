@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
+import { claveProveedor, nombreProveedorLimpio } from "@/lib/import/articulos-bulk";
 
 // ─────────────────────────────────────────────────────────────
 // reasignarItems — Derivación de ítems sin comprador (Admin).
@@ -103,11 +104,22 @@ export async function reasignarItems(
       // envío rutee solo (por FK). Se crean si no existían.
       if (crearMapeo && labs.length > 0) {
         for (const nombre of labs) {
-          await tx.proveedor.upsert({
-            where: { nombre },
-            update: { compradorId: comprador.id },
-            create: { nombre, compradorId: comprador.id },
-          });
+          // Sin distinguir mayúsculas/espacios, para no duplicar el proveedor.
+          const limpio = nombreProveedorLimpio(nombre);
+          const existente = (
+            await tx.proveedor.findMany({
+              where: { nombre: { equals: limpio, mode: "insensitive" } },
+              select: { id: true, nombre: true },
+            })
+          ).find((c) => claveProveedor(c.nombre) === claveProveedor(limpio));
+          if (existente) {
+            await tx.proveedor.update({
+              where: { id: existente.id },
+              data: { compradorId: comprador.id },
+            });
+          } else {
+            await tx.proveedor.create({ data: { nombre: limpio, compradorId: comprador.id } });
+          }
         }
         mapeosCreados = labs.length;
       }
