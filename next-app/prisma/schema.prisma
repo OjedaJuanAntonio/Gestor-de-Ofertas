@@ -105,6 +105,10 @@ model User {
   // con clave temporal, o reseteo del admin). Hasta cambiarla, el usuario es
   // redirigido a /cambiar-clave y no puede usar el resto de la app.
   mustChangePassword Boolean @default(false)
+  // Vencimiento de la clave temporal (alta, alta masiva o reseteo del admin).
+  // Si pasa esa fecha sin que el usuario la haya cambiado, el login la rechaza
+  // y el admin tiene que generar otra. null = no hay clave temporal pendiente.
+  claveTemporalVence DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -260,6 +264,25 @@ model ItemSolicitud {
   @@index([compradorId, estadoDecision])
   @@index([solicitudId])
   @@map("items_solicitud")
+}
+
+// ─────────────────────────────────────────────
+// LOGIN INTENTOS (freno a la fuerza bruta)
+// Contadores de intentos FALLIDOS de login dentro de una ventana.
+// Viven en la base (y no en memoria) para que el freno valga entre
+// todas las instancias del servidor. La clave identifica qué se cuenta:
+//   "par:<email>|<ip>"  → ese email desde esa IP
+//   "ip:<ip>"           → cualquier email desde esa IP (password spraying)
+//   "email:<email>"     → ese email desde cualquier IP
+// ─────────────────────────────────────────────
+
+model LoginIntento {
+  clave    String   @id
+  cantidad Int
+  venceAt  DateTime
+
+  @@index([venceAt])
+  @@map("login_intentos")
 }
 
 // ─────────────────────────────────────────────

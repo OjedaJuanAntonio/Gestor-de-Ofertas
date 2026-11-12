@@ -4,6 +4,10 @@ loadEnv({ path: ".env" });
 
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { exigirBaseLocal } from "./guard-entorno";
+
+// Datos demo: solo contra una base local.
+exigirBaseLocal("prisma/seed-demo.ts");
 
 // ─────────────────────────────────────────────────────────────
 // Datos transaccionales DEMO para poblar el dashboard de analytics.

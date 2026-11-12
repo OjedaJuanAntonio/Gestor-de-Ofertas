@@ -96,8 +96,28 @@ tests/                    Vitest (unit/integration) + Playwright (e2e)
 
 1. **Base de datos**: reemplazá `DATABASE_URL` / `DIRECT_URL` por las de Neon o Supabase
    (pooler en `DATABASE_URL`, conexión directa en `DIRECT_URL`). Corré
-   `npx prisma migrate deploy`.
+   `npx prisma migrate deploy` **después de cada despliegue que traiga migraciones**.
 2. **Auth**: generá `AUTH_SECRET` con `openssl rand -base64 32` y seteá `AUTH_URL`.
-3. **Correos**: poné `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y `EMAIL_DRY_RUN=false`.
-4. **Cron de la cola**: configurá un cron (Vercel Cron, QStash, GitHub Action) que llame
+3. **Administrador real** (no corras el seed: crea usuarios demo con contraseña pública y se
+   niega a correr contra una base que no sea local):
+
+   ```bash
+   npm run admin:crear -- tu@email.com "Tu Nombre"
+   ```
+
+   Muestra una clave temporal una sola vez; al entrar se pide elegir la definitiva. Si en esa
+   base quedaron los usuarios demo (`*@drogueria.com`, clave `demo1234`), desactivalos con
+   `--desactivar-demo` o desde **Usuarios**.
+4. **Correos**: poné `RESEND_API_KEY`, `RESEND_FROM_EMAIL` y `EMAIL_DRY_RUN=false`.
+5. **Cron de la cola**: configurá un cron (Vercel Cron, QStash, GitHub Action) que llame
    `POST /api/cron/outbox` cada 1-2 min con `Authorization: Bearer <CRON_SECRET>`.
+
+### Cuentas y contraseñas
+
+- **Claves temporales**: el alta masiva de farmacias y el botón "Clave temporal" generan una
+  clave **aleatoria por usuario**, que se muestra una sola vez (el alta masiva deja descargar
+  un CSV) y vence a los 14 días. Al entrar con ella se obliga a elegir una propia.
+- **Sesiones**: duran 12 h y se revalidan contra la base cada 5 min. Desactivar un usuario o
+  cambiarle la contraseña corta sus sesiones abiertas.
+- **Intentos de login**: se frenan por email+IP (10), por IP (50) y por email (50) cada 15
+  minutos. Los contadores están en la tabla `login_intentos`.

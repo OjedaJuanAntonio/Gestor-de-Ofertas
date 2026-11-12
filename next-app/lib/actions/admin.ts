@@ -10,7 +10,7 @@ import { parseArticulosCsv } from "@/lib/import/articulos-csv";
 import { parseFarmaciasCsv } from "@/lib/import/farmacias-csv";
 import { parseUsuariosCsv } from "@/lib/import/usuarios-csv";
 import { invalidarTodosLosArticulos } from "@/lib/data/articulos";
-import { CLAVE_TEMPORAL } from "@/lib/password";
+import { generarClaveTemporal, vencimientoClaveTemporal } from "@/lib/clave-temporal";
 
 // ─────────────────────────────────────────────────────────────
 // Server Actions del panel Admin (gestión de maestros).
@@ -131,6 +131,10 @@ export async function crearUsuario(input: z.infer<typeof UsuarioSchema>): Promis
           password: hash,
           role: d.role,
           farmaciaId: d.role === "FARMACIA" ? d.farmaciaId : null,
+          // La contraseña la eligió el admin (la conoce): el usuario debe
+          // reemplazarla por una propia en su primer ingreso.
+          mustChangePassword: true,
+          claveTemporalVence: vencimientoClaveTemporal(),
         },
       });
       for (const nombre of labs) {
@@ -175,36 +179,56 @@ export async function resetearPassword(
   if (!p.success) return { ok: false, error: p.error.issues[0].message };
   try {
     const hash = await bcrypt.hash(p.data.password, 10);
-    await prisma.user.update({ where: { id: p.data.id }, data: { password: hash } });
+    // La clave la conoce el admin → es temporal: se pide cambiarla al entrar.
+    await prisma.user.update({
+      where: { id: p.data.id },
+      data: {
+        password: hash,
+        mustChangePassword: true,
+        claveTemporalVence: vencimientoClaveTemporal(),
+      },
+    });
     revalidatePath("/admin/usuarios");
-    return { ok: true, mensaje: "Contraseña actualizada." };
+    return { ok: true, mensaje: "Contraseña actualizada. Se le pedirá cambiarla al entrar." };
   } catch {
     return { ok: false, error: "No se pudo actualizar la contraseña." };
   }
 }
 
+export type ClaveTemporalResult =
+  | { ok: true; clave: string; vence: string }
+  | { ok: false; error: string };
+
 /**
- * Resetea el usuario a la clave temporal y lo obliga a cambiarla en el próximo
- * inicio de sesión. Es la herramienta para el "me olvidé la contraseña": el
- * admin la dicta y el usuario elige una nueva al entrar.
+ * Genera una clave temporal ALEATORIA para el usuario y lo obliga a cambiarla
+ * en el próximo inicio de sesión. Es la herramienta para el "me olvidé la
+ * contraseña". La clave se devuelve una única vez (en la base solo queda su
+ * hash): el admin se la pasa al usuario y vence a los pocos días.
  */
-export async function resetearAClaveTemporal(id: string): Promise<Result> {
+export async function resetearAClaveTemporal(id: string): Promise<ClaveTemporalResult> {
   const admin = await requireAdmin();
   if (!admin) return { ok: false, error: "No autorizado." };
   try {
-    const hash = await bcrypt.hash(CLAVE_TEMPORAL, 10);
+    const clave = generarClaveTemporal();
+    const vence = vencimientoClaveTemporal();
     await prisma.user.update({
       where: { id },
-      data: { password: hash, mustChangePassword: true },
+      data: {
+        password: await bcrypt.hash(clave, 10),
+        mustChangePassword: true,
+        claveTemporalVence: vence,
+      },
     });
     revalidatePath("/admin/usuarios");
-    return { ok: true, mensaje: `Clave temporal: ${CLAVE_TEMPORAL} (se la pedirá cambiar al entrar).` };
+    return { ok: true, clave, vence: vence.toISOString() };
   } catch {
     return { ok: false, error: "No se pudo resetear la contraseña." };
   }
 }
 
 // ── Import masivo de usuarios de farmacia (CSV) ────────────
+export type CredencialNueva = { farmacia: string; email: string; clave: string };
+
 export type ImportUsuariosResult =
   | {
       ok: true;
@@ -212,15 +236,19 @@ export type ImportUsuariosResult =
       omitidos: number;
       noEncontradas: string[];
       errores: { linea: number; motivo: string }[];
+      /** Claves temporales de los usuarios creados. Se devuelven UNA sola vez:
+       *  en la base solo quedan los hashes. */
+      credenciales: CredencialNueva[];
+      vence: string;
     }
   | { ok: false; error: string };
 
 /**
  * Alta masiva de logins de farmacia: un usuario (rol FARMACIA) por fila,
- * matcheado con una farmacia EXISTENTE por nombre (case-insensitive). Todos
- * quedan con la clave temporal y mustChangePassword=true. Los emails ya
- * existentes se omiten (createMany skipDuplicates); las farmacias que no existen
- * se informan aparte (hay que importarlas primero).
+ * matcheado con una farmacia EXISTENTE por nombre (case-insensitive). Cada
+ * usuario recibe una clave temporal aleatoria propia (con vencimiento) y
+ * mustChangePassword=true. Los emails ya existentes se omiten; las farmacias
+ * que no existen se informan aparte (hay que importarlas primero).
  */
 export async function importarUsuariosFarmacia(csvText: string): Promise<ImportUsuariosResult> {
   const admin = await requireAdmin();
@@ -234,49 +262,74 @@ export async function importarUsuariosFarmacia(csvText: string): Promise<ImportU
   const porNombre = new Map(todas.map((f) => [f.nombre.trim().toLowerCase(), f.id]));
 
   const noEncontradas: string[] = [];
-  const hash = await bcrypt.hash(CLAVE_TEMPORAL, 10);
-  const data: {
-    email: string;
-    nombre: string;
-    password: string;
-    role: "FARMACIA";
-    farmaciaId: string;
-    mustChangePassword: boolean;
-  }[] = [];
-
+  const candidatos: { farmacia: string; farmaciaId: string; email: string; nombre: string }[] = [];
   for (const v of validos) {
     const farmaciaId = porNombre.get(v.farmacia.toLowerCase());
     if (!farmaciaId) {
       noEncontradas.push(v.farmacia);
       continue;
     }
-    data.push({
-      email: v.email,
-      nombre: v.nombre || v.farmacia,
-      password: hash,
-      role: "FARMACIA",
-      farmaciaId,
-      mustChangePassword: true,
-    });
+    candidatos.push({ farmacia: v.farmacia, farmaciaId, email: v.email, nombre: v.nombre || v.farmacia });
   }
 
-  if (data.length === 0)
+  if (candidatos.length === 0)
     return {
       ok: false,
       error: "Ninguna farmacia del archivo existe en el sistema. Importá primero las farmacias.",
     };
 
   try {
-    const res = await prisma.user.createMany({ data, skipDuplicates: true });
+    // Los emails que ya existen se omiten ANTES de generar claves (no tiene
+    // sentido hashear ni mostrar una clave que no se va a usar).
+    const yaExisten = new Set(
+      (
+        await prisma.user.findMany({
+          where: { email: { in: candidatos.map((c) => c.email) } },
+          select: { email: true },
+        })
+      ).map((u) => u.email),
+    );
+    const nuevos = candidatos.filter((c) => !yaExisten.has(c.email));
+
+    const vence = vencimientoClaveTemporal();
+    const conClave = await Promise.all(
+      nuevos.map(async (c) => {
+        const clave = generarClaveTemporal();
+        return { ...c, clave, hash: await bcrypt.hash(clave, 10) };
+      }),
+    );
+
+    // skipDuplicates cubre la carrera de dos imports simultáneos; lo que
+    // devuelve createManyAndReturn son los que REALMENTE se crearon.
+    const creados = await prisma.user.createManyAndReturn({
+      data: conClave.map((c) => ({
+        email: c.email,
+        nombre: c.nombre,
+        password: c.hash,
+        role: "FARMACIA" as const,
+        farmaciaId: c.farmaciaId,
+        mustChangePassword: true,
+        claveTemporalVence: vence,
+      })),
+      skipDuplicates: true,
+      select: { email: true },
+    });
+    const emailsCreados = new Set(creados.map((u) => u.email));
+
     revalidatePath("/admin/usuarios");
     return {
       ok: true,
-      importados: res.count,
-      omitidos: data.length - res.count,
+      importados: creados.length,
+      omitidos: candidatos.length - creados.length,
       noEncontradas: [...new Set(noEncontradas)],
       errores,
+      credenciales: conClave
+        .filter((c) => emailsCreados.has(c.email))
+        .map((c) => ({ farmacia: c.farmacia, email: c.email, clave: c.clave })),
+      vence: vence.toISOString(),
     };
-  } catch {
+  } catch (e) {
+    console.error("[importarUsuariosFarmacia] error:", e);
     return { ok: false, error: "Error al guardar los usuarios." };
   }
 }

@@ -46,7 +46,13 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError("Email o contraseña incorrectos.");
+        setError(
+          result.code === "bloqueado"
+            ? "Demasiados intentos fallidos. Esperá 15 minutos y volvé a probar."
+            : result.code === "clave_vencida"
+              ? "Tu clave temporal venció. Pedile una nueva al administrador."
+              : "Email o contraseña incorrectos.",
+        );
       } else {
         router.push(callbackUrl);
         router.refresh();

@@ -17,6 +17,7 @@ import {
   UserX,
   FlaskConical,
   History,
+  KeyRound,
   LogOut,
   ChevronRight,
 } from "lucide-react";
@@ -131,6 +132,13 @@ export function Sidebar({ role, nombre, email, badges = {} }: SidebarProps) {
             {role}
           </span>
         </div>
+        <Link
+          href="/cambiar-clave"
+          className="flex items-center gap-3 rounded-lg px-3 py-1.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          <KeyRound className="h-4 w-4" />
+          Cambiar contraseña
+        </Link>
         <Button
           variant="ghost"
           size="sm"
