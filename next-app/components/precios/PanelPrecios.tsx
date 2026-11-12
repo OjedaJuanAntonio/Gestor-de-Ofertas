@@ -17,15 +17,7 @@ import {
 } from "@/lib/actions/precios";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-
-const fmtFecha = (d: Date | null) =>
-  d
-    ? new Intl.DateTimeFormat("es-AR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "2-digit",
-      }).format(new Date(d))
-    : "—";
+import { fmtFecha } from "@/lib/fecha";
 
 type ImportResult =
   | { ok: true; cargados: number; ignorados: number; solicitudesFinalizadas: number; correosEncolados: number; mensaje?: string }

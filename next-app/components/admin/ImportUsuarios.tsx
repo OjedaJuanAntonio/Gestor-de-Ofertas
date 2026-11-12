@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/admin";
 import { toCsv } from "@/lib/export/csv";
 import { DIAS_VIGENCIA_CLAVE_TEMPORAL } from "@/lib/password";
+import { diaEnArgentina } from "@/lib/fecha";
 import { Button } from "@/components/ui/button";
 
 const EJEMPLO = `codigo,email
@@ -32,7 +33,7 @@ function descargarClaves(credenciales: CredencialNueva[]) {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
   a.href = url;
-  a.download = `claves-temporales-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `claves-temporales-${diaEnArgentina(new Date())}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

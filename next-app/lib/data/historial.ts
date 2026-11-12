@@ -1,4 +1,5 @@
 import "server-only";
+import { inicioDelDia } from "@/lib/fecha";
 
 // ─────────────────────────────────────────────────────────────
 // Helpers compartidos por los historiales: dirección de orden y
@@ -13,12 +14,6 @@ export function normalizarDir(dir?: string): Dir {
   return dir === "asc" ? "asc" : "desc";
 }
 
-function parseDia(s?: string): Date | undefined {
-  if (!s) return undefined;
-  const d = new Date(`${s}T00:00:00`);
-  return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
 /**
  * Filtro Prisma de rango de fechas, inclusivo en ambos extremos.
  * `hasta` incluye todo su día (gte desde 00:00, lt el día siguiente).
@@ -28,8 +23,9 @@ export function rangoFecha(
   desde?: string,
   hasta?: string,
 ): { gte?: Date; lt?: Date } | undefined {
-  const g = parseDia(desde);
-  const h = parseDia(hasta);
+  // Los días son días de Argentina (ver lib/fecha.ts), no del servidor.
+  const g = inicioDelDia(desde);
+  const h = inicioDelDia(hasta);
   if (!g && !h) return undefined;
   const out: { gte?: Date; lt?: Date } = {};
   if (g) out.gte = g;

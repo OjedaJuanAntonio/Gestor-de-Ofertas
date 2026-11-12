@@ -12,17 +12,11 @@ import type {
   EstadoDecision,
   MotivoSolicitud,
 } from "@/types";
+import { fmtFechaHora } from "@/lib/fecha";
 
 export const metadata = { title: "Detalle de solicitud · Farmacia" };
 
-const fmt = (d: Date) =>
-  new Intl.DateTimeFormat("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(d));
+const fmt = (d: Date) => fmtFechaHora(d);
 
 const ESTADO_SOL_CLS: Record<string, string> = {
   PENDIENTE: "bg-slate-100 text-slate-600",

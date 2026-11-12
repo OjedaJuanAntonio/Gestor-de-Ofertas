@@ -26,7 +26,9 @@ export async function getBadgeCounts(
     counts.compradorPendientes = await prisma.itemSolicitud.count({
       where:
         role === "ADMIN"
-          ? { estadoDecision: "PENDIENTE" }
+          ? // Igual que su bandeja: pendientes con comprador (los que no tienen
+            // están en "Sin asignar", con su propio contador).
+            { compradorId: { not: null }, estadoDecision: "PENDIENTE" }
           : { compradorId: userId, estadoDecision: "PENDIENTE" },
     });
     counts.testersPendientes = await prisma.itemSolicitud.count({

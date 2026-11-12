@@ -1,35 +1,35 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { auth } from "@/lib/auth";
 import { processOutbox } from "@/lib/email/outbox";
 
 // ─────────────────────────────────────────────────────────────
-// POST/GET /api/cron/outbox
-// Procesa la cola de correos. Pensado para un cron externo
-// (Vercel Cron, QStash, GitHub Action) que llame cada 1-2 min con
-// el header Authorization: Bearer <CRON_SECRET>. También lo puede
-// disparar un ADMIN logueado (para forzar el envío manualmente).
+// GET/POST /api/cron/outbox
+// Procesa la cola de correos. Lo llama un cron externo (el workflow
+// .github/workflows/correos.yml, o Vercel Cron) con el encabezado
+// Authorization: Bearer <CRON_SECRET>.
+//
+// Solo acepta el secreto. El administrador ya no lo dispara desde acá
+// con su sesión (un GET con efectos y cookies se podía gatillar desde
+// otro sitio): usa el botón "Procesar cola ahora" de Admin → Correos.
 // ─────────────────────────────────────────────────────────────
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function secretoValido(recibido: string | null): boolean {
+  const secreto = process.env.CRON_SECRET;
+  if (!secreto || !recibido) return false;
+  const a = Buffer.from(recibido);
+  const b = Buffer.from(`Bearer ${secreto}`);
+  // Comparación en tiempo constante (no delata cuántos caracteres acertó).
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 async function handler(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
-  const autorizadoPorCron =
-    !!secret && authHeader === `Bearer ${secret}`;
-
-  let autorizadoPorAdmin = false;
-  if (!autorizadoPorCron) {
-    const session = await auth();
-    autorizadoPorAdmin =
-      (session?.user as { role?: string } | undefined)?.role === "ADMIN";
-  }
-
-  if (!autorizadoPorCron && !autorizadoPorAdmin) {
+  if (!secretoValido(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
-
   try {
     const resultado = await processOutbox();
     return NextResponse.json({ ok: true, ...resultado });

@@ -3,7 +3,7 @@
 // Usado por el lookup de artículos para responder en <50ms ante
 // búsquedas repetidas sobre un maestro pesado (~155k artículos),
 // sin pegarle a la DB cada vez. El maestro cambia ~1 vez/día, así
-// que un TTL de 24h es seguro; las mutaciones invalidan por clave.
+// que cachear unos minutos es seguro; las mutaciones invalidan por clave.
 // ─────────────────────────────────────────────────────────────
 
 type Entry<V> = { value: V; expiresAt: number };
@@ -35,7 +35,15 @@ export class TtlCache<K, V> {
   }
 }
 
-const HORA = 60 * 60 * 1000;
+const MINUTO = 60 * 1000;
 
-/** Caché global de lookups de artículos (24h). */
-export const articuloCache = new TtlCache<string, unknown>(24 * HORA);
+/**
+ * Caché global de lookups de artículos (10 minutos).
+ *
+ * Es por instancia: en serverless hay varias, y una mutación solo limpia la
+ * instancia que la atendió. Con 24 h (el valor anterior), reasignar el comprador
+ * de un proveedor podía tardar un día en verse en las demás. Por eso el TTL es
+ * corto y, además, el ENVÍO de la solicitud no usa la caché para decidir a qué
+ * comprador va cada ítem (ver lookupArticulosBatch con `sinCache`).
+ */
+export const articuloCache = new TtlCache<string, unknown>(10 * MINUTO);

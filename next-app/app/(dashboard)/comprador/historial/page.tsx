@@ -4,17 +4,11 @@ import { getHistoricoComprador } from "@/lib/data/comprador";
 import { SortableTh } from "@/components/historial/SortableTh";
 import { ESTADO_DECISION_LABEL } from "@/types";
 import type { EstadoDecision } from "@/types";
+import { fmtFecha } from "@/lib/fecha";
 
 export const metadata = { title: "Historial · Comprador" };
 
-const fmt = (d: Date | null) =>
-  d
-    ? new Intl.DateTimeFormat("es-AR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "2-digit",
-      }).format(new Date(d))
-    : "—";
+const fmt = (d: Date | null) => fmtFecha(d);
 
 type EstadoHist = "APROBADO" | "RECHAZADO";
 const ESTADOS: EstadoHist[] = ["APROBADO", "RECHAZADO"];
@@ -76,7 +70,8 @@ export default async function HistorialCompradorPage({
   const dir: Dir = sp.dir === "asc" ? "asc" : "desc";
 
   const user = await requireRole("ADMIN", "COMPRADOR");
-  const data = await getHistoricoComprador(user.id, {
+  // El admin ve el historial de todos los compradores.
+  const data = await getHistoricoComprador(user.role === "ADMIN" ? null : user.id, {
     page,
     estado,
     q: q || undefined,

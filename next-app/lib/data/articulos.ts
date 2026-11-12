@@ -6,7 +6,7 @@ import type { ArticuloLookup } from "@/types";
 
 // ─────────────────────────────────────────────────────────────
 // Acceso al maestro de artículos + resolución del comprador
-// responsable por laboratorio. Cacheado en memoria (TTL 24h).
+// responsable por proveedor. Cacheado en memoria unos minutos.
 // ─────────────────────────────────────────────────────────────
 
 const CACHE_NULL = "__NULL__";
@@ -35,12 +35,15 @@ export async function lookupArticulo(
  * involucrados) en vez de 2×N. Respeta la caché por EAN (hits y nulls) y la
  * puebla con los resultados nuevos.
  *
+ * `sinCache: true` ignora lo cacheado y consulta siempre la base.
+ *
  * Devuelve un Map keyeado por EAN NORMALIZADO → artículo o null. El llamador
  * debe normalizar el EAN con `normalizeEan` antes de buscar en el Map (como
  * se guardan en el maestro). Los EAN que no normalizan se ignoran.
  */
 export async function lookupArticulosBatch(
   rawEans: string[],
+  opts: { sinCache?: boolean } = {},
 ): Promise<Map<string, ArticuloLookup | null>> {
   const out = new Map<string, ArticuloLookup | null>();
 
@@ -50,8 +53,14 @@ export async function lookupArticulosBatch(
   if (eans.length === 0) return out;
 
   // 1) Caché: separar los que ya conocemos (artículo o null) de los faltantes.
+  //    Con `sinCache` se consulta todo a la base (y se refresca la caché): lo
+  //    usa el envío de la solicitud, donde el comprador tiene que ser el actual.
   const faltantes: string[] = [];
   for (const ean of eans) {
+    if (opts.sinCache) {
+      faltantes.push(ean);
+      continue;
+    }
     const cached = articuloCache.get(ean) as ArticuloLookup | typeof CACHE_NULL | undefined;
     if (cached === CACHE_NULL) out.set(ean, null);
     else if (cached) out.set(ean, cached as ArticuloLookup);
@@ -70,6 +79,7 @@ export async function lookupArticulosBatch(
       proveedor: {
         select: {
           nombre: true,
+          activo: true,
           comprador: {
             select: { id: true, nombre: true, email: true, activo: true, role: true },
           },
@@ -82,8 +92,11 @@ export async function lookupArticulosBatch(
   const encontrados = new Set<string>();
   for (const a of articulos) {
     const c = a.proveedor.comprador;
-    // El responsable vale solo si sigue activo y con rol comprador.
-    const comprador = c && c.activo && c.role === "COMPRADOR" ? c : null;
+    // El responsable vale solo si sigue activo y con rol comprador, y si el
+    // proveedor está activo: desactivar un proveedor manda sus ítems a
+    // "Sin asignar" (antes ese botón no tenía ningún efecto).
+    const comprador =
+      a.proveedor.activo && c && c.activo && c.role === "COMPRADOR" ? c : null;
     const result: ArticuloLookup = {
       codigoBarra: a.codigoBarra,
       descripcion: a.descripcion,

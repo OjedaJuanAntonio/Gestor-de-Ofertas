@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { auth } from "@/lib/auth";
 import { getTodosPendientesPrecios } from "@/lib/data/precios";
 import { COL_ID, COL_CARGADO } from "@/lib/business/precios-xlsx";
+import { fmtFechaLarga, diaEnArgentina } from "@/lib/fecha";
 
 // ─────────────────────────────────────────────────────────────
 // GET /api/precios/export → Excel (.xlsx) de los ítems aprobados
@@ -58,9 +59,7 @@ export async function GET() {
       laboratorio: it.laboratorio,
       cantidad: it.cantidad,
       condicion: it.condicionAutorizada ?? "",
-      fechaAprobacion: it.fechaAprobacion
-        ? new Intl.DateTimeFormat("es-AR").format(new Date(it.fechaAprobacion))
-        : "",
+      fechaAprobacion: fmtFechaLarga(it.fechaAprobacion, ""),
       cargado: "",
     });
   }
@@ -76,7 +75,7 @@ export async function GET() {
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = diaEnArgentina(new Date());
 
   return new Response(buffer as ArrayBuffer, {
     headers: {

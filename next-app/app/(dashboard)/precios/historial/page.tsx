@@ -2,19 +2,11 @@ import { History, Search } from "lucide-react";
 import { getHistoricoPrecios } from "@/lib/data/precios";
 import { SortableTh } from "@/components/historial/SortableTh";
 import { requireRole } from "@/lib/authz";
+import { fmtFechaHora } from "@/lib/fecha";
 
 export const metadata = { title: "Historial de carga · Precios" };
 
-const fmt = (d: Date | null) =>
-  d
-    ? new Intl.DateTimeFormat("es-AR", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).format(new Date(d))
-    : "—";
+const fmt = (d: Date | null) => fmtFechaHora(d);
 
 type Dir = "asc" | "desc";
 const SORT_DEFECTO = "cargado";

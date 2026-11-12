@@ -3,6 +3,8 @@
 // testeables que operan sobre registros planos de ítems.
 // ─────────────────────────────────────────────────────────────
 
+import { diaEnArgentina } from "@/lib/fecha";
+
 export type RegistroMetrica = {
   fechaEnvio: Date;
   fechaAprobacion: Date | null;
@@ -93,7 +95,7 @@ export type PuntoVolumen = { fecha: string; cantidad: number };
 export function volumenDiario(registros: RegistroMetrica[]): PuntoVolumen[] {
   const mapa = new Map<string, number>();
   for (const r of registros) {
-    const f = new Date(r.fechaEnvio).toISOString().slice(0, 10);
+    const f = diaEnArgentina(r.fechaEnvio);
     mapa.set(f, (mapa.get(f) ?? 0) + 1);
   }
   return [...mapa.entries()]

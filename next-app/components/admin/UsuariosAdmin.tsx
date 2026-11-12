@@ -44,6 +44,8 @@ export function UsuariosAdmin({
   const [resetError, setResetError] = useState<string | null>(null);
   const [tempUser, setTempUser] = useState<{ id: string; nombre: string } | null>(null);
   const [tempError, setTempError] = useState<string | null>(null);
+  // Resultado de activar/desactivar (p. ej. ítems que pasaron a "Sin asignar").
+  const [avisoToggle, setAvisoToggle] = useState<{ ok: boolean; texto: string } | null>(null);
   // Clave recién generada: se muestra una sola vez, hasta cerrar el diálogo.
   const [tempClave, setTempClave] = useState<string | null>(null);
   const [copiada, setCopiada] = useState(false);
@@ -137,6 +139,15 @@ export function UsuariosAdmin({
         </div>
       </div>
 
+      {avisoToggle && (
+        <p
+          role="status"
+          className={`rounded-lg border px-4 py-2 text-sm ${avisoToggle.ok ? "border-green-300 bg-green-50 text-green-800" : "border-red-300 bg-red-50 text-red-700"}`}
+        >
+          {avisoToggle.texto}
+        </p>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
         <table className="w-full text-left">
           <thead className="sticky top-0 z-10 bg-slate-50">
@@ -181,7 +192,16 @@ export function UsuariosAdmin({
                   >
                     Resetear clave
                   </button>
-                  <ToggleBtn id={u.id} activo={u.activo} pending={pending} onToggle={(id, a) => start(async () => { await toggleUsuario(id, a); router.refresh(); })} />
+                  <ToggleBtn id={u.id} activo={u.activo} pending={pending} onToggle={(id, a) =>
+                      start(async () => {
+                        setAvisoToggle(null);
+                        const res = await toggleUsuario(id, a);
+                        if (!res.ok) setAvisoToggle({ ok: false, texto: res.error });
+                        else if (res.mensaje) setAvisoToggle({ ok: true, texto: res.mensaje });
+                        router.refresh();
+                      })
+                    }
+                  />
                 </td>
               </tr>
             ))}
