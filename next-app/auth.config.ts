@@ -1,10 +1,10 @@
 import type { NextAuthConfig } from "next-auth";
 
 // ─────────────────────────────────────────────────────────────
-// auth.config.ts — Configuración Edge-compatible de NextAuth
+// auth.config.ts — Configuración base de NextAuth (sin Prisma ni bcrypt)
 //
-// No importa Prisma ni bcrypt (no disponibles en Edge Runtime).
-// La validación real de credenciales ocurre en lib/auth.ts
+// Páginas, callbacks de sesión y duración. La validación de credenciales
+// y la revalidación contra la base están en lib/auth.ts.
 // ─────────────────────────────────────────────────────────────
 
 export const authConfig: NextAuthConfig = {
@@ -40,12 +40,15 @@ export const authConfig: NextAuthConfig = {
           nombre?: string;
           farmaciaId?: string | null;
           mustChangePassword?: boolean;
+          pv?: string;
         };
         token.id = u.id;
         token.role = u.role;
         token.nombre = u.nombre;
         token.farmaciaId = u.farmaciaId;
         token.mustChangePassword = u.mustChangePassword ?? false;
+        // Huella de la contraseña al momento del login (ver lib/session-check.ts).
+        token.pv = u.pv;
       }
       return token;
     },
@@ -69,6 +72,8 @@ export const authConfig: NextAuthConfig = {
     },
   },
 
-  session: { strategy: "jwt" },
+  // Sesión de 12 h (antes: el default de Auth.js, 30 días). Se renueva con el
+  // uso; alcanza para una jornada y limita el daño de una sesión robada.
+  session: { strategy: "jwt", maxAge: 12 * 60 * 60 },
   providers: [],
 };

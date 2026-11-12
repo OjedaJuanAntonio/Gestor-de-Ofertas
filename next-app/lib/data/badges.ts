@@ -41,7 +41,9 @@ export async function getBadgeCounts(
 
   if (role === "PRECIOS" || role === "ADMIN") {
     counts.preciosPendientes = await prisma.itemSolicitud.count({
-      where: { estadoDecision: "APROBADO", cargadoERP: false },
+      // Mismo criterio que la lista de Precios: los probadores no pasan por el
+      // ERP (se cierran en Testers) y nunca tendrán cargadoERP = true.
+      where: { estadoDecision: "APROBADO", cargadoERP: false, motivo: { not: "PROBADOR" } },
     });
   }
 

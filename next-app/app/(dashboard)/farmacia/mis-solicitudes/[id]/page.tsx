@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireRole, alcanceFarmacia } from "@/lib/authz";
 import { getSolicitudDetalle } from "@/lib/data/farmacia";
 import {
   ESTADO_SOLICITUD_LABEL,
@@ -42,9 +42,9 @@ export default async function SolicitudDetallePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth();
-  const user = session?.user as { role?: string; farmaciaId?: string | null } | undefined;
-  const farmaciaId = user?.role === "FARMACIA" ? (user.farmaciaId ?? null) : null;
+  const user = await requireRole("ADMIN", "FARMACIA");
+  // null = todas (solo admin). Una FARMACIA sin farmacia asignada no ve nada.
+  const farmaciaId = alcanceFarmacia(user);
 
   const solicitud = await getSolicitudDetalle(id, farmaciaId);
 

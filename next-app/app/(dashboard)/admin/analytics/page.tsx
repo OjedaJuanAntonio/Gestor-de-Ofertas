@@ -8,6 +8,7 @@ import {
   volumenDiario,
 } from "@/lib/analytics/metrics";
 import { KpiCard, BarList, ColumnChart } from "@/components/analytics/Charts";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Reportes · Gerencial" };
 
@@ -15,6 +16,7 @@ const fmtHoras = (h: number) =>
   h >= 24 ? `${(h / 24).toFixed(1)} d` : `${h.toFixed(1)} h`;
 
 export default async function AnalyticsPage() {
+  await requireRole("ADMIN");
   const registros = await getRegistrosMetrica();
 
   const resp = tiempoRespuestaComprador(registros);

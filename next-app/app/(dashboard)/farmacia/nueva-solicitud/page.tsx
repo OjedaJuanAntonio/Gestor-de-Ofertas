@@ -1,22 +1,20 @@
 import { ClipboardList } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireRole, alcanceFarmacia } from "@/lib/authz";
 import { getFarmaciasActivas } from "@/lib/data/farmacias";
 import { GrillaCarga } from "@/components/carga/GrillaCarga";
 
 export const metadata = { title: "Nueva Solicitud · Gestor de Ofertas" };
 
 export default async function NuevaSolicitudPage() {
-  const session = await auth();
-  const user = session?.user as
-    | { role?: string; farmaciaId?: string | null }
-    | undefined;
-
-  const farmacias = await getFarmaciasActivas();
+  const user = await requireRole("ADMIN", "FARMACIA");
 
   // Si el usuario es operador de UNA farmacia, queda preseleccionada y
   // bloqueada (solo carga lo suyo). El ADMIN puede elegir cualquiera.
-  const farmaciaFija =
-    user?.role === "FARMACIA" && user.farmaciaId ? user.farmaciaId : null;
+  const farmaciaFija = alcanceFarmacia(user);
+
+  // Al operador solo se le manda SU farmacia; el listado completo (códigos,
+  // nombres y mails de toda la red) es solo para el admin.
+  const farmacias = await getFarmaciasActivas(farmaciaFija ?? undefined);
 
   return (
     <div className="mx-auto max-w-7xl">

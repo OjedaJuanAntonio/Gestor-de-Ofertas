@@ -1,10 +1,12 @@
 import { Mail } from "lucide-react";
 import { listCorreosProblema } from "@/lib/data/admin";
 import { CorreosAdmin } from "@/components/admin/CorreosAdmin";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Correos · Admin" };
 
 export default async function CorreosPage() {
+  await requireRole("ADMIN");
   const correos = await listCorreosProblema();
   return (
     <div className="mx-auto max-w-5xl">

@@ -1,9 +1,18 @@
-import NextAuth from "next-auth";
-import { authConfig } from "./auth.config";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { auth } from "@/lib/auth";
 
-const { auth } = NextAuth(authConfig);
+// ─────────────────────────────────────────────────────────────
+// proxy.ts (antes middleware.ts; la convención "middleware" quedó
+// deprecada en Next 16). Corre en runtime Node, así que usa la
+// configuración completa de Auth.js: además de decodificar la
+// sesión, la revalida contra la base (lib/session-check.ts) y, si
+// el usuario fue desactivado o cambió su clave, borra la cookie.
+//
+// Es la PRIMERA barrera, no la única: cada sección vuelve a chequear
+// el rol en su layout (lib/authz.ts) y cada Server Action valida
+// rol y propiedad por su cuenta.
+// ─────────────────────────────────────────────────────────────
 
 const ROLE_ROUTES: Record<string, string[]> = {
   "/admin":     ["ADMIN"],
@@ -18,7 +27,7 @@ type AuthedRequest = NextRequest & {
 
 const CAMBIAR_CLAVE = "/cambiar-clave";
 
-export default auth(function middleware(req: AuthedRequest) {
+export default auth(function proxy(req: AuthedRequest) {
   const { pathname } = req.nextUrl;
   const user = req.auth?.user;
   const userRole: string | undefined = user?.role;

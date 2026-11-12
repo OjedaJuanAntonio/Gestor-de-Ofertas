@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Package, Search } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireRole, alcanceFarmacia } from "@/lib/authz";
 import { getSolicitudesFarmacia } from "@/lib/data/farmacia";
 import { SortableTh } from "@/components/historial/SortableTh";
 import { ESTADO_SOLICITUD_LABEL } from "@/types";
@@ -76,9 +76,9 @@ export default async function MisSolicitudesPage({
   const sort = sp.sort ?? SORT_DEFECTO;
   const dir: Dir = sp.dir === "asc" ? "asc" : "desc";
 
-  const session = await auth();
-  const user = session?.user as { role?: string; farmaciaId?: string | null } | undefined;
-  const farmaciaId = user?.role === "FARMACIA" ? (user.farmaciaId ?? null) : null;
+  const user = await requireRole("ADMIN", "FARMACIA");
+  // null = todas (solo admin). Una FARMACIA sin farmacia asignada no ve nada.
+  const farmaciaId = alcanceFarmacia(user);
   const data = await getSolicitudesFarmacia(farmaciaId, {
     page,
     estado,

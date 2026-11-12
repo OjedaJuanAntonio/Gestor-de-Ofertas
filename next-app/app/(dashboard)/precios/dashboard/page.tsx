@@ -1,6 +1,7 @@
 import { PackageCheck } from "lucide-react";
 import { getPendientesPrecios } from "@/lib/data/precios";
 import { PanelPrecios } from "@/components/precios/PanelPrecios";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Carga ERP · Precios" };
 
@@ -9,6 +10,7 @@ export default async function PreciosDashboardPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  await requireRole("ADMIN", "PRECIOS");
   const sp = await searchParams;
   const page = Math.max(1, Number(sp.page ?? "1") || 1);
   const data = await getPendientesPrecios(page);

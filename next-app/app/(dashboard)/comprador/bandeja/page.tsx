@@ -1,15 +1,14 @@
 import { Inbox } from "lucide-react";
-import { auth } from "@/lib/auth";
+import { requireRole } from "@/lib/authz";
 import { getBandejaComprador } from "@/lib/data/comprador";
 import { BandejaComprador } from "@/components/comprador/BandejaComprador";
 
 export const metadata = { title: "Bandeja · Comprador" };
 
 export default async function BandejaPage() {
-  const session = await auth();
-  const user = session?.user as { id: string; nombre?: string } | undefined;
+  const user = await requireRole("ADMIN", "COMPRADOR");
 
-  const items = user ? await getBandejaComprador(user.id) : [];
+  const items = await getBandejaComprador(user.id);
 
   return (
     <div className="mx-auto max-w-7xl">

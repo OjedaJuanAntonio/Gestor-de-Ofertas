@@ -2,10 +2,12 @@ import { Package } from "lucide-react";
 import { listFarmacias } from "@/lib/data/admin";
 import { FarmaciasAdmin } from "@/components/admin/FarmaciasAdmin";
 import { ImportFarmacias } from "@/components/admin/ImportFarmacias";
+import { requireRole } from "@/lib/authz";
 
 export const metadata = { title: "Farmacias · Admin" };
 
 export default async function FarmaciasPage() {
+  await requireRole("ADMIN");
   const farmacias = await listFarmacias();
   return (
     <div className="mx-auto max-w-5xl space-y-8">
